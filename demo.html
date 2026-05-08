@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>离线监测统计看板</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js">
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -24,16 +23,19 @@
         }
 
         .dashboard-container {
-            width: 1700px;
+            width: 100%;
+            min-width: 1700px;
+            /* 保持设计最小宽度 */
+            max-width: calc(100vw - 20px);
+            /* 左右空白各10px */
             height: 1050px;
-            /* 固定高度，完全容纳所有区块 */
+            /* 固定高度，完整容纳所有区块 */
             margin: 0 auto;
             background-color: white;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
             padding: 16px;
             overflow-y: auto;
-            /* 若内容超出视口则滚动 */
             display: flex;
             flex-direction: column;
         }
@@ -215,7 +217,7 @@
             grid-template-columns: 1fr 1fr;
             gap: 8px;
             height: 220px;
-            /* 原160px → 220px，图表更舒展 */
+            /* 提升高度，图表更舒展 */
         }
 
         .chart-card {
@@ -244,14 +246,12 @@
             min-height: 0;
             position: relative;
             overflow: hidden;
-            /* 裁剪越界的图表元素 */
         }
 
         .chart-container canvas {
             display: block;
             max-width: 100%;
             max-height: 100%;
-            /* 双重保险 */
         }
 
         /* 排名区域 */
@@ -265,7 +265,7 @@
             grid-template-columns: 1fr 1fr;
             gap: 8px;
             height: 240px;
-            /* 原220px → 240px，给表格更多空间 */
+            /* 提升高度，确保表格不溢出 */
         }
 
         .ranking-card {
@@ -278,7 +278,6 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            /* 彻底杜绝表格溢出 */
         }
 
         .ranking-table-container {
@@ -286,7 +285,6 @@
             min-height: 0;
             position: relative;
             overflow: hidden;
-            /* 内部滚动由 tbody 处理 */
         }
 
         .ranking-table {
@@ -314,7 +312,7 @@
         .ranking-table tbody {
             display: block;
             height: 140px;
-            /* 配合新的卡片高度，防止撑破 */
+            /* 配合卡片高度，防止撑破 */
             overflow-y: auto;
         }
 
@@ -589,7 +587,7 @@
             </div>
         </div>
 
-        <!-- 趋势分析区域（高度提升至220px） -->
+        <!-- 趋势分析区域（高度220px） -->
         <div class="trends-section">
             <div class="section-title">离线趋势分析</div>
             <div class="trends-row">
@@ -608,7 +606,7 @@
             </div>
         </div>
 
-        <!-- 设备排名区域（高度提升至240px，防止表格溢出） -->
+        <!-- 设备排名区域（高度240px） -->
         <div class="ranking-section">
             <div class="section-title">设备离线排名</div>
             <div class="ranking-row">
