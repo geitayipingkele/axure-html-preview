@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>离线监测统计看板</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js">
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+
+        body {
+            background-color: #f5f7fa;
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+
+        .dashboard-container {
+            width: 1700px;
+            height: 1050px;
+            /* 固定高度，完全容纳所有区块 */
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            padding: 16px;
+            overflow-y: auto;
+            /* 若内容超出视口则滚动 */
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 头部区域 - 领域按钮组 + 时间刷新 */
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e8e8e8;
+            flex-shrink: 0;
+        }
+
+        .domain-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .domain-btn {
+            padding: 6px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            background-color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            color: #333;
+            transition: all 0.2s;
+        }
+
+        .domain-btn.active {
+            border: 1px solid #4869F3;
+            color: #4869F3;
+            background-color: rgba(72, 105, 243, 0.05);
+        }
+
+        .domain-btn:not(.active) {
+            border: 1px solid transparent;
+            color: #555;
+        }
+
+        .domain-btn:not(.active):hover {
+            background-color: #f5f5f5;
+            border-color: #d9d9d9;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .current-time {
+            font-size: 14px;
+            color: #666;
+            background-color: #f9f9f9;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-family: monospace;
+        }
+
+        .refresh-btn {
+            padding: 6px 12px;
+            background-color: #4869F3;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: background-color 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background-color: #3a57d1;
+        }
+
+        /* KPI卡片区域 */
+        .kpi-section {
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #1a1a1a;
+            display: flex;
+            align-items: center;
+        }
+
+        .section-title::before {
+            content: '';
+            display: inline-block;
+            width: 3px;
+            height: 16px;
+            background-color: #4869F3;
+            margin-right: 8px;
+            border-radius: 1px;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .kpi-card {
+            background-color: white;
+            border-radius: 6px;
+            padding: 12px;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, 0.04);
+            border: 1px solid #f0f0f0;
+            position: relative;
+        }
+
+        .kpi-label {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .kpi-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .kpi-desc {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 4px;
+        }
+
+        .kpi-status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+
+        .status-normal {
+            background-color: rgba(82, 196, 26, 0.12);
+            color: #52c41a;
+        }
+
+        .status-warning {
+            background-color: rgba(250, 173, 20, 0.12);
+            color: #faad14;
+        }
+
+        .status-alert {
+            background-color: rgba(245, 34, 45, 0.12);
+            color: #f5222d;
+        }
+
+        /* 趋势分析区域 */
+        .trends-section {
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+
+        .trends-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            height: 220px;
+            /* 原160px → 220px，图表更舒展 */
+        }
+
+        .chart-card {
+            background-color: white;
+            border-radius: 6px;
+            padding: 10px;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, 0.04);
+            border: 1px solid #f0f0f0;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            /* 防止内容溢出 */
+        }
+
+        .chart-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #1a1a1a;
+            flex-shrink: 0;
+        }
+
+        .chart-container {
+            flex: 1;
+            min-height: 0;
+            position: relative;
+            overflow: hidden;
+            /* 裁剪越界的图表元素 */
+        }
+
+        .chart-container canvas {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            /* 双重保险 */
+        }
+
+        /* 排名区域 */
+        .ranking-section {
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+
+        .ranking-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            height: 240px;
+            /* 原220px → 240px，给表格更多空间 */
+        }
+
+        .ranking-card {
+            background-color: white;
+            border-radius: 6px;
+            padding: 10px;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, 0.04);
+            border: 1px solid #f0f0f0;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            /* 彻底杜绝表格溢出 */
+        }
+
+        .ranking-table-container {
+            flex: 1;
+            min-height: 0;
+            position: relative;
+            overflow: hidden;
+            /* 内部滚动由 tbody 处理 */
+        }
+
+        .ranking-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .ranking-table thead {
+            position: sticky;
+            top: 0;
+            background-color: #f8f9fa;
+            z-index: 10;
+        }
+
+        .ranking-table th {
+            text-align: left;
+            padding: 6px 5px;
+            font-weight: 600;
+            color: #555;
+            border-bottom: 1px solid #e8e8e8;
+            background-color: #f8f9fa;
+        }
+
+        .ranking-table tbody {
+            display: block;
+            height: 140px;
+            /* 配合新的卡片高度，防止撑破 */
+            overflow-y: auto;
+        }
+
+        .ranking-table thead,
+        .ranking-table tbody tr {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        .ranking-table td {
+            padding: 6px 5px;
+            border-bottom: 1px solid #f5f5f5;
+        }
+
+        .ranking-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .ranking-table .rank {
+            font-weight: 600;
+            color: #666;
+            width: 35px;
+        }
+
+        .ranking-table .device-id {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .ranking-table .count {
+            font-weight: 600;
+            color: #4869F3;
+        }
+
+        /* 超阈值设备清单 */
+        .exceed-list-container {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            margin-top: 4px;
+        }
+
+        .exceed-list-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #1a1a1a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-shrink: 0;
+        }
+
+        .filter-select {
+            padding: 5px 8px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            background-color: white;
+            color: #333;
+            font-size: 12px;
+        }
+
+        .exceed-table-container {
+            flex-shrink: 0;
+            min-height: 0;
+            overflow: hidden;
+            border: 1px solid #f0f0f0;
+            border-radius: 6px;
+            background-color: white;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, 0.04);
+            height: 250px;
+        }
+
+        .exceed-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .exceed-table thead {
+            position: sticky;
+            top: 0;
+            background-color: #f8f9fa;
+            z-index: 10;
+        }
+
+        .exceed-table th {
+            text-align: left;
+            padding: 8px 6px;
+            font-weight: 600;
+            color: #555;
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #e8e8e8;
+        }
+
+        .exceed-table tbody {
+            display: block;
+            height: 200px;
+            overflow-y: auto;
+        }
+
+        .exceed-table thead,
+        .exceed-table tbody tr {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        .exceed-table td {
+            padding: 8px 6px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .exceed-table tr:hover {
+            background-color: #f9f9f9;
+        }
+
+        .exceed-type {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .exceed-type-count {
+            background-color: rgba(250, 173, 20, 0.15);
+            color: #d48806;
+        }
+
+        .exceed-type-duration {
+            background-color: rgba(245, 34, 45, 0.15);
+            color: #cf1322;
+        }
+
+        .exceed-amount {
+            font-weight: 600;
+        }
+
+        .table-footer {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px solid #e8e8e8;
+            flex-shrink: 0;
+        }
+
+        .pagination {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .pagination button {
+            padding: 3px 6px;
+            border: 1px solid #d9d9d9;
+            background-color: white;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        .pagination button:hover {
+            border-color: #4869F3;
+            color: #4869F3;
+        }
+
+        .pagination button.active {
+            background-color: #4869F3;
+            color: white;
+            border-color: #4869F3;
+        }
+
+        /* 滚动条 */
+        .dashboard-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .dashboard-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .dashboard-container::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+
+        .dashboard-container::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        .ranking-table tbody::-webkit-scrollbar,
+        .exceed-table tbody::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .ranking-table tbody::-webkit-scrollbar-track,
+        .exceed-table tbody::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 2px;
+        }
+
+        .ranking-table tbody::-webkit-scrollbar-thumb,
+        .exceed-table tbody::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- 头部：领域按钮组 + 时间与刷新 -->
+        <div class="dashboard-header">
+            <div class="domain-buttons" id="domainButtons">
+                <!-- 动态生成领域按钮，JS填充 -->
+            </div>
+            <div class="header-right">
+                <div class="current-time" id="currentTime">2026-04-23 11:22:23</div>
+                <button class="refresh-btn" id="refreshBtn">⟳ 刷新</button>
+            </div>
+        </div>
+
+        <!-- KPI指标区域 -->
+        <div class="kpi-section">
+            <div class="section-title">核心概览指标</div>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-label">设备总数</div>
+                    <div class="kpi-value">1,258</div>
+                    <div class="kpi-desc">当前生效监测任务覆盖的设备</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">离线设备数</div>
+                    <div class="kpi-value">89</div>
+                    <div class="kpi-desc">至少发生1次离线的设备</div>
+                    <div class="kpi-status status-normal">正常 (≤5%)</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">累计离线次数</div>
+                    <div class="kpi-value">427</div>
+                    <div class="kpi-desc">统计周期内总离线次数</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">累计离线总时长</div>
+                    <div class="kpi-value">1,248h</div>
+                    <div class="kpi-desc">统计周期内总离线时长</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">离线次数超阈值设备数</div>
+                    <div class="kpi-value">18</div>
+                    <div class="kpi-desc">单设备离线次数≥配置阈值</div>
+                    <div class="kpi-status status-normal">正常</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">离线时长超阈值设备数</div>
+                    <div class="kpi-value">32</div>
+                    <div class="kpi-desc">单设备离线时长≥配置阈值</div>
+                    <div class="kpi-status status-warning">异常</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 趋势分析区域（高度提升至220px） -->
+        <div class="trends-section">
+            <div class="section-title">离线趋势分析</div>
+            <div class="trends-row">
+                <div class="chart-card">
+                    <div class="chart-title">离线事件趋势图</div>
+                    <div class="chart-container">
+                        <canvas id="offlineTrendChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">离线总时长趋势图</div>
+                    <div class="chart-container">
+                        <canvas id="durationTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设备排名区域（高度提升至240px，防止表格溢出） -->
+        <div class="ranking-section">
+            <div class="section-title">设备离线排名</div>
+            <div class="ranking-row">
+                <div class="ranking-card">
+                    <div class="chart-title">离线次数 TOP 10 设备</div>
+                    <div class="ranking-table-container">
+                        <table class="ranking-table">
+                            <thead>
+                                <tr><th width="40">排名</th><th>设备名称</th><th width="80">所属单位</th><th width="80">离线次数</th></tr>
+                            </thead>
+                            <tbody id="countTop10Body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="ranking-card">
+                    <div class="chart-title">离线总时长 TOP 10 设备</div>
+                    <div class="ranking-table-container">
+                        <table class="ranking-table">
+                            <thead>
+                                <tr><th width="40">排名</th><th>设备名称</th><th width="80">所属单位</th><th width="100">离线总时长</th></tr>
+                            </thead>
+                            <tbody id="durationTop10Body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 超阈值设备清单 -->
+        <div class="exceed-list-container">
+            <div class="exceed-list-title"><span>超阈值设备清单</span></div>
+            <div class="filter-controls">
+                <select class="filter-select" id="alertTypeFilter"><option value="all">全部</option><option value="count">离线次数超阈值</option><option value="duration">离线时长超阈值</option></select>
+                <select class="filter-select" id="unitFilter"><option value="all">全部所属单位</option><option value="广电">广电</option></select>
+                <select class="filter-select" id="exceedFilter"><option value="all">全部超阈值幅度</option><option value="high">>150%</option><option value="medium">100%-150%</option><option value="low">≤100%</option></select>
+            </div>
+            <div class="exceed-table-container">
+                <table class="exceed-table">
+                    <thead><tr><th width="160">设备名称</th><th width="80">所属单位</th><th width="80">所属领域</th><th width="100">所属型号</th><th width="100">终端类型</th><th width="100">超阈值类型</th><th width="80">实际值</th><th width="80">配置阈值</th><th width="90">超阈值幅度</th></tr></thead>
+                    <tbody id="exceedListBody"></tbody>
+                </table>
+            </div>
+            <div class="table-footer"><div class="pagination"><button class="active">1</button><button>2</button><button>3</button><button>...</button><button>8</button></div></div>
+        </div>
+    </div>
+
+    <script>
+        // 领域配置
+        const domains = ['全领域', '发电', '输电', '变电', '配用电', '基建', '安监', '供应链', 'IT信息', '办公', '市场营销', '综合管理', '财务', '其他'];
+        let currentDomain = '全领域';
+
+        // 模拟数据
+        const countTop10Data = [
+            { id: "DEV-2024-00123", unit: "广电", count: 48 },
+            { id: "DEV-2024-00345", unit: "广电", count: 36 },
+            { id: "DEV-2024-00789", unit: "广电", count: 29 },
+            { id: "DEV-2024-00567", unit: "广电", count: 24 },
+            { id: "DEV-2024-00234", unit: "广电", count: 22 },
+            { id: "DEV-2024-00987", unit: "广电", count: 19 },
+            { id: "DEV-2024-00456", unit: "广电", count: 17 },
+            { id: "DEV-2024-00678", unit: "广电", count: 15 },
+            { id: "DEV-2024-00890", unit: "广电", count: 14 },
+            { id: "DEV-2024-00112", unit: "广电", count: 12 }
+        ];
+        const durationTop10Data = [
+            { id: "DEV-2024-00321", unit: "广电", duration: "142h 30m" },
+            { id: "DEV-2024-00543", unit: "广电", duration: "128h 15m" },
+            { id: "DEV-2024-00765", unit: "广电", duration: "96h 45m" },
+            { id: "DEV-2024-00234", unit: "广电", duration: "88h 20m" },
+            { id: "DEV-2024-00987", unit: "广电", duration: "76h 10m" },
+            { id: "DEV-2024-00123", unit: "广电", duration: "65h 45m" },
+            { id: "DEV-2024-00456", unit: "广电", duration: "54h 30m" },
+            { id: "DEV-2024-00678", unit: "广电", duration: "48h 15m" },
+            { id: "DEV-2024-00890", unit: "广电", duration: "42h 20m" },
+            { id: "DEV-2024-00567", unit: "广电", duration: "38h 45m" }
+        ];
+        const exceedListData = [
+            { id: "DEV-2024-00123", unit: "广电", field: "输电", model: "型号1", type: "视频/摄像头", exceedType: "count", value: "48次", threshold: "30次", amount: "160%" },
+            { id: "DEV-2024-00321", unit: "广电", field: "配电", model: "型号2", type: "传感器", exceedType: "duration", value: "142h 30m", threshold: "100h", amount: "142.5%" },
+            { id: "DEV-2024-00543", unit: "广电", field: "输电", model: "型号1", type: "视频/摄像头", exceedType: "duration", value: "128h 15m", threshold: "100h", amount: "128.3%" },
+            { id: "DEV-2024-00765", unit: "广电", field: "变电", model: "型号3", type: "控制器", exceedType: "count", value: "36次", threshold: "30次", amount: "120%" },
+            { id: "DEV-2024-00234", unit: "广电", field: "输电", model: "型号1", type: "视频/摄像头", exceedType: "duration", value: "88h 20m", threshold: "72h", amount: "122.7%" },
+            { id: "DEV-2024-00987", unit: "广电", field: "配电", model: "型号2", type: "传感器", exceedType: "count", value: "29次", threshold: "25次", amount: "116%" },
+            { id: "DEV-2024-00456", unit: "广电", field: "变电", model: "型号3", type: "控制器", exceedType: "duration", value: "54h 30m", threshold: "48h", amount: "113.5%" },
+            { id: "DEV-2024-00678", unit: "广电", field: "输电", model: "型号1", type: "视频/摄像头", exceedType: "count", value: "24次", threshold: "20次", amount: "120%" },
+            { id: "DEV-2024-00890", unit: "广电", field: "配电", model: "型号2", type: "传感器", exceedType: "duration", value: "42h 20m", threshold: "36h", amount: "117.6%" },
+            { id: "DEV-2024-00567", unit: "广电", field: "输电", model: "型号1", type: "视频/摄像头", exceedType: "count", value: "22次", threshold: "20次", amount: "110%" }
+        ];
+
+        function renderCountTop10() {
+            const tbody = document.getElementById('countTop10Body');
+            tbody.innerHTML = countTop10Data.map((item, idx) =>
+                `<tr><td class="rank">${idx+1}</td><td class="device-id">${item.id}</td><td>${item.unit}</td><td class="count">${item.count}</td></tr>`
+            ).join('');
+        }
+
+        function renderDurationTop10() {
+            const tbody = document.getElementById('durationTop10Body');
+            tbody.innerHTML = durationTop10Data.map((item, idx) =>
+                `<tr><td class="rank">${idx+1}</td><td class="device-id">${item.id}</td><td>${item.unit}</td><td class="count">${item.duration}</td></tr>`
+            ).join('');
+        }
+
+        function renderExceedList() {
+            const tbody = document.getElementById('exceedListBody');
+            tbody.innerHTML = exceedListData.map(item => {
+                const typeClass = item.exceedType === 'count' ? 'exceed-type-count' : 'exceed-type-duration';
+                const typeText = item.exceedType === 'count' ? '离线次数' : '离线时长';
+                return `<tr>
+                    <td>${item.id}</td><td>${item.unit}</td><td>${item.field}</td><td>${item.model}</td><td>${item.type}</td>
+                    <td><span class="exceed-type ${typeClass}">${typeText}</span></td>
+                    <td>${item.value}</td><td>${item.threshold}</td><td class="exceed-amount">${item.amount}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        function updateKPIStatus() {
+            const offlineDeviceCount = 89,
+                totalDevices = 1258,
+                offlinePercentage = (offlineDeviceCount / totalDevices) * 100;
+            const offlineCountExceed = 18,
+                offlineDurationExceed = 32;
+            const offlineDeviceStatus = document.querySelectorAll('.kpi-card')[1].querySelector('.kpi-status');
+            if (offlinePercentage <= 5) {
+                offlineDeviceStatus.className = 'kpi-status status-normal';
+                offlineDeviceStatus.textContent = '正常 (≤5%)';
+            } else if (offlinePercentage <= 10) {
+                offlineDeviceStatus.className = 'kpi-status status-warning';
+                offlineDeviceStatus.textContent = '异常 (5%-10%)';
+            } else {
+                offlineDeviceStatus.className = 'kpi-status status-alert';
+                offlineDeviceStatus.textContent = '警告 (>10%)';
+            }
+            const countExceedStatus = document.querySelectorAll('.kpi-card')[4].querySelector('.kpi-status');
+            if (offlineCountExceed === 0) {
+                countExceedStatus.className = 'kpi-status status-normal';
+                countExceedStatus.textContent = '正常';
+            } else if (offlineCountExceed >= 40) {
+                countExceedStatus.className = 'kpi-status status-alert';
+                countExceedStatus.textContent = '警告';
+            } else if (offlineCountExceed >= 20) {
+                countExceedStatus.className = 'kpi-status status-warning';
+                countExceedStatus.textContent = '异常';
+            } else {
+                countExceedStatus.className = 'kpi-status status-normal';
+                countExceedStatus.textContent = '正常';
+            }
+            const durationExceedStatus = document.querySelectorAll('.kpi-card')[5].querySelector('.kpi-status');
+            if (offlineDurationExceed === 0) {
+                durationExceedStatus.className = 'kpi-status status-normal';
+                durationExceedStatus.textContent = '正常';
+            } else if (offlineDurationExceed >= 40) {
+                durationExceedStatus.className = 'kpi-status status-alert';
+                durationExceedStatus.textContent = '警告';
+            } else if (offlineDurationExceed >= 20) {
+                durationExceedStatus.className = 'kpi-status status-warning';
+                durationExceedStatus.textContent = '异常';
+            } else {
+                durationExceedStatus.className = 'kpi-status status-normal';
+                durationExceedStatus.textContent = '正常';
+            }
+        }
+
+        // 初始化图表
+        let offlineChart, durationChart;
+
+        function initCharts() {
+            const ctx1 = document.getElementById('offlineTrendChart').getContext('2d');
+            offlineChart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: ['5月1日', '5月5日', '5月10日', '5月15日', '5月20日', '5月25日', '5月30日'],
+                    datasets: [{
+                        label: '离线事件次数',
+                        data: [18, 24, 32, 28, 36, 42, 38],
+                        borderColor: '#4869F3',
+                        backgroundColor: 'rgba(72,105,243,0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { font: { size: 10 } } } },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: '次数', font: { size: 10 } }, ticks: { font: { size: 9 } } },
+                        x: { ticks: { font: { size: 9 } } }
+                    }
+                }
+            });
+            const ctx2 = document.getElementById('durationTrendChart').getContext('2d');
+            durationChart = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: ['5月1日', '5月5日', '5月10日', '5月15日', '5月20日', '5月25日', '5月30日'],
+                    datasets: [{
+                        label: '离线总时长(h)',
+                        data: [120, 156, 210, 185, 245, 280, 225],
+                        backgroundColor: '#4869F3',
+                        borderColor: '#4869F3',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { font: { size: 10 } } } },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: '时长(h)', font: { size: 10 } }, ticks: { font: { size: 9 } } },
+                        x: { ticks: { font: { size: 9 } } }
+                    }
+                }
+            });
+        }
+
+        function updateTime() {
+            const now = new Date();
+            const formatted = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + ' ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('currentTime').innerText = formatted;
+        }
+
+        function initDomainButtons() {
+            const container = document.getElementById('domainButtons');
+            container.innerHTML = domains.map(d =>
+                `<button class="domain-btn ${d === currentDomain ? 'active' : ''}" data-domain="${d}">${d}</button>`
+            ).join('');
+            document.querySelectorAll('.domain-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    currentDomain = btn.getAttribute('data-domain');
+                    document.querySelectorAll('.domain-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    updateTime();
+                    console.log(`切换到领域：${currentDomain}`);
+                });
+            });
+        }
+
+        function initRefresh() {
+            document.getElementById('refreshBtn').addEventListener('click', () => {
+                updateTime();
+                console.log('数据已刷新');
+            });
+        }
+
+        function initFilters() {
+            document.getElementById('alertTypeFilter').addEventListener('change', (e) => console.log('筛选类型:', e.target.value));
+            document.getElementById('unitFilter').addEventListener('change', (e) => console.log('筛选单位:', e.target.value));
+            document.getElementById('exceedFilter').addEventListener('change', (e) => console.log('筛选幅度:', e.target.value));
+            document.querySelectorAll('.pagination button').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.pagination button').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+        }
+
+        function init() {
+            initDomainButtons();
+            updateTime();
+            initRefresh();
+            renderCountTop10();
+            renderDurationTop10();
+            renderExceedList();
+            updateKPIStatus();
+            initCharts();
+            initFilters();
+        }
+
+        init();
+    </script>
+</body>
+</html>
