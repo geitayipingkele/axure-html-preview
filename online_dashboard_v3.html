@@ -1,0 +1,782 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线数据看板</title>
+    <style>
+        :root {
+            --primary-color: #4869F3;
+            --primary-light: rgba(72,105,243,0.15);
+            --bg-color: #FFFFFF;
+            --text-color: #333333;
+            --border-color: #E0E0E0;
+            --gray-bg: #F8F9FA;
+            --card-shadow: 0 4px 12px rgba(0,0,0,0.04);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #F0F2F5;
+            color: var(--text-color);
+            line-height: 1.5;
+        }
+
+        /* 修改点1：顶部留白3px，底部留白3px */
+        .container {
+            width: 100%;
+            padding: 3px 10px; 
+            margin: 0 auto;
+        }
+
+        /* 查询条件区 */
+        .query-section {
+            background: var(--bg-color);
+            padding: 20px 24px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            box-shadow: var(--card-shadow);
+            font-size: 14px;
+        }
+
+        .query-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .query-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .query-item input[type="text"], .query-item select {
+            height: 32px;
+            padding: 4px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            outline: none;
+            min-width: 160px;
+            transition: var(--transition);
+        }
+
+        .query-item input:focus, .query-item select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px var(--primary-light);
+        }
+
+        .query-item label {
+            color: #666;
+            white-space: nowrap;
+        }
+
+        .advanced-fields {
+            display: none; 
+            background-color: #F8FAFF;
+            padding: 16px;
+            margin-top: 16px;
+            border-radius: 4px;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            position: relative;
+            border: 1px dashed #d0d7f5;
+        }
+
+        .collapse-btn-wrapper {
+            width: 100%;
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 8px;
+        }
+
+        button {
+            cursor: pointer;
+            height: 32px;
+            padding: 0 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: var(--transition);
+            border: 1px solid var(--border-color);
+            background: #fff;
+            color: #333;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        button:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: #fff;
+            border-color: var(--primary-color);
+        }
+
+        .btn-primary:hover {
+            background-color: #3855D0;
+            color: #fff;
+        }
+
+        /* 指标展示区 */
+        .kpi-section {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .kpi-card {
+            background: var(--bg-color);
+            padding: 18px 16px;
+            border-radius: 6px;
+            box-shadow: var(--card-shadow);
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .kpi-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(72,105,243,0.08);
+        }
+
+        .kpi-label {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .kpi-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-color);
+        }
+
+        .kpi-unit {
+            font-size: 12px;
+            margin-left: 2px;
+            font-weight: normal;
+            color: #999;
+        }
+
+        /* 图形展示区 */
+        .charts-section {
+            display: grid;
+            grid-template-columns: 1fr 2.5fr 1.5fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .chart-card {
+            background: var(--bg-color);
+            padding: 20px;
+            border-radius: 6px;
+            box-shadow: var(--card-shadow);
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #333;
+        }
+
+        .chart-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            width: 100%;
+        }
+
+        /* 修改点4：饼图样式优化 - 采用更美观的环形图(Donut Chart) */
+        .donut-chart-container {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            margin: 0 auto 20px;
+        }
+
+        .donut-chart { 
+            width: 100%; 
+            height: 100%; 
+            border-radius: 50%; 
+            background: conic-gradient(var(--primary-color) 0% 79%, #E5E9F2 79% 100%); 
+            transition: transform 0.3s;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+        }
+        
+        .donut-chart-container:hover .donut-chart {
+            transform: scale(1.03);
+        }
+
+        .donut-hole {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            background: var(--bg-color);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            z-index: 2;
+        }
+
+        /* 修改点2&3：折线图坐标轴修正至100及样式互动优化 */
+        .line-svg { width: 100%; height: 100%; overflow: visible; }
+        .axis-line { stroke: #D9D9D9; stroke-width: 1; }
+        .axis-text { fill: #888; font-size: 11px; }
+        .grid-line { stroke: #F0F0F0; stroke-width: 1; stroke-dasharray: 4 4; }
+        
+        /* 进场动画 */
+        .line-path {
+            stroke-dasharray: 1500;
+            stroke-dashoffset: 1500;
+            animation: drawLine 1.5s ease-out forwards;
+        }
+        .area-path {
+            opacity: 0;
+            animation: fadeIn 1s ease-out 0.8s forwards;
+        }
+        @keyframes drawLine { to { stroke-dashoffset: 0; } }
+        @keyframes fadeIn { to { opacity: 1; } }
+
+        /* 节点交互 */
+        .chart-point { cursor: pointer; }
+        .chart-point .point-circle { transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .tooltip-box { opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; transform: translateY(5px); }
+        
+        /* 悬停辅助线 */
+        .hover-line { stroke: var(--primary-color); stroke-width: 1; stroke-dasharray: 4; opacity: 0; transition: opacity 0.2s; }
+        
+        .chart-point:hover .point-circle { r: 6; stroke: #fff; stroke-width: 2; filter: drop-shadow(0 2px 4px rgba(72,105,243,0.5)); }
+        .chart-point:hover .tooltip-box { opacity: 1; transform: translateY(0); }
+        .chart-point:hover .hover-line { opacity: 1; }
+
+        /* 排行榜样式 */
+        .bar-ranking { width: 100%; display: flex; flex-direction: column; gap: 14px; }
+        .bar-item {}
+        .bar-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; color: #555; }
+        .bar-progress { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 4px; transition: width 0.8s cubic-bezier(0.165, 0.84, 0.44, 1); }
+        
+        /* 数据清单区 */
+        .table-section {
+            background: var(--bg-color);
+            padding: 20px 24px;
+            border-radius: 6px;
+            box-shadow: var(--card-shadow);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th {
+            background: var(--gray-bg);
+            text-align: left;
+            padding: 14px 10px;
+            border-bottom: 1px solid var(--border-color);
+            color: #333;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 14px 10px;
+            border-bottom: 1px solid #f0f0f0;
+            color: #555;
+            transition: background 0.2s;
+        }
+
+        tr:hover td {
+            background-color: #F8FAFF;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .page-btns {
+            display: flex;
+            gap: 6px;
+        }
+
+        .page-btn {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .page-btn:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .page-btn.active {
+            background: var(--primary-color);
+            color: #fff;
+            border-color: var(--primary-color);
+        }
+
+        .tag {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            background: #f0f0f0;
+            color: #666;
+        }
+        .tag-blue { background: #E8F0FF; color: var(--primary-color); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- 1. 查询条件区 -->
+    <section class="query-section">
+        <div class="query-row" style="justify-content: space-between;">
+            <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+                <input type="text" placeholder="请输入终端名称" style="width: 160px;">
+                <input type="text" placeholder="请输入物联标识码" style="width: 160px;">
+                <select style="width: 160px; color: #666;">
+                    <option>请选择所属单位</option>
+                    <option>南方电网</option>
+                </select>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <input type="checkbox" id="chkSub" checked style="accent-color: var(--primary-color);"> 
+                    <label for="chkSub" style="color: var(--primary-color); cursor:pointer;">含下级单位</label>
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px; margin-left: 8px;">
+                    <input type="checkbox" id="chkDh"> 
+                    <label for="chkDh" style="cursor:pointer; color: #666;">仅查看电鸿终端</label>
+                </div>
+                <div style="display: flex; align-items: center; border: 1px solid #e0e0e0; border-radius: 4px; height: 32px; padding: 0 10px; background: #fff;">
+                    <span style="color:#999; margin-right:8px;">📅</span>
+                    <input type="text" value="2026-05-07 00:00:00" style="border:none; outline:none; width:135px; font-size:13px; padding:0;">
+                    <span style="color:#ccc; margin: 0 8px;">至</span>
+                    <input type="text" value="2026-05-08 00:00:00" style="border:none; outline:none; width:135px; font-size:13px; padding:0;">
+                </div>
+                <span style="color: #666; font-size: 13px;">区间时长: 24小时</span>
+            </div>
+            <div style="display: flex; gap: 12px;">
+                <button class="btn-primary">查询</button>
+                <button onclick="location.reload()">重置</button>
+                <button onclick="toggleAdvanced()" id="toggleBtn">高级筛选</button>
+            </div>
+        </div>
+
+        <div id="advancedArea" class="advanced-fields">
+            <div class="query-item">
+                <label>所属项目：</label>
+                <input type="text" placeholder="请选择所属项目">
+            </div>
+            <div class="query-item">
+                <label>所属群组：</label>
+                <input type="text" placeholder="请选择所属群组">
+            </div>
+            <div class="query-item">
+                <label>节点名称：</label>
+                <input type="text" placeholder="请选择节点">
+            </div>
+            <div class="query-item">
+                <label>安全分区：</label>
+                <select><option>请选择安全分区</option></select>
+            </div>
+            <div class="collapse-btn-wrapper">
+                <button onclick="toggleAdvanced()" style="padding: 2px 12px; height: 28px; background: #fff; border: 1px solid #d9d9d9;">收起 ^</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 2. 指标展示区 -->
+    <section class="kpi-section">
+        <div class="kpi-card">
+            <div class="kpi-label">设备总数</div>
+            <div class="kpi-value">1,240</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">在线设备数</div>
+            <div class="kpi-value" style="color: #52c41a;">980</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">离线设备数</div>
+            <div class="kpi-value" style="color: #ff4d4f;">260</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">累计在线次数</div>
+            <div class="kpi-value">4,521</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">累计在线时长</div>
+            <div class="kpi-value">28,450 <span class="kpi-unit">h</span></div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">在线时长占比</div>
+            <div class="kpi-value">82.4 <span class="kpi-unit">%</span></div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">平均在线率</div>
+            <div class="kpi-value" style="color: var(--primary-color);">79.5 <span class="kpi-unit">%</span></div>
+        </div>
+    </section>
+
+    <!-- 3. 图形展示区 -->
+    <section class="charts-section">
+        <!-- 饼图改为更现代的环形图 -->
+        <div class="chart-card">
+            <div class="chart-title">设备在线状态分布</div>
+            <div class="chart-content" style="flex-direction: column;">
+                <div class="donut-chart-container">
+                    <div class="donut-chart"></div>
+                    <div class="donut-hole">
+                        <span style="font-size: 24px; font-weight: bold; color: var(--primary-color);">79%</span>
+                        <span style="font-size: 11px; color: #999;">在线占比</span>
+                    </div>
+                </div>
+                <div style="font-size:13px; color:#666; width: 100%; display: flex; justify-content: space-around; margin-top: 10px;">
+                    <span><span style="color:var(--primary-color); font-size:16px;">●</span> 在线 980</span>
+                    <span><span style="color:#E5E9F2; font-size:16px;">●</span> 离线 260</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 折线图优化 -->
+        <div class="chart-card">
+            <div class="chart-title">设备在线趋势</div>
+            <div class="chart-content">
+                <svg class="line-svg" viewBox="-40 -10 540 220">
+                    <!-- Y轴及背景网格 (最大值修改为100, 分割为0,25,50,75,100) -->
+                    <!-- 物理高度180，即 y=180(0%), y=135(25%), y=90(50%), y=45(75%), y=0(100%) -->
+                    <line x1="0" y1="180" x2="500" y2="180" class="axis-line" /> <!-- X轴 -->
+                    <line x1="0" y1="0" x2="0" y2="180" class="axis-line" />   <!-- Y轴 -->
+                    
+                    <line x1="0" y1="135" x2="500" y2="135" class="grid-line" />
+                    <line x1="0" y1="90" x2="500" y2="90" class="grid-line" />
+                    <line x1="0" y1="45" x2="500" y2="45" class="grid-line" />
+                    <line x1="0" y1="0" x2="500" y2="0" class="grid-line" />
+
+                    <!-- Y轴标签 -->
+                    <text x="-30" y="184" class="axis-text">0</text>
+                    <text x="-30" y="139" class="axis-text">25</text>
+                    <text x="-30" y="94" class="axis-text">50</text>
+                    <text x="-30" y="49" class="axis-text">75</text>
+                    <text x="-30" y="4" class="axis-text">100</text>
+
+                    <!-- X轴标签 -->
+                    <text x="40" y="200" class="axis-text" text-anchor="middle">04:00</text>
+                    <text x="140" y="200" class="axis-text" text-anchor="middle">08:00</text>
+                    <text x="240" y="200" class="axis-text" text-anchor="middle">12:00</text>
+                    <text x="340" y="200" class="axis-text" text-anchor="middle">16:00</text>
+                    <text x="440" y="200" class="axis-text" text-anchor="middle">20:00</text>
+
+                    <!-- 数据连线与填充区 (增加平滑与动画) -->
+                    <!-- 模拟数据点: 04:00(82%), 08:00(98%), 12:00(91%), 16:00(80%), 20:00(88%) -->
+                    <!-- 计算物理Y坐标: 82%->32.4, 98%->3.6, 91%->16.2, 80%->36, 88%->21.6 -->
+                    <path class="line-path" d="M 0,40 S 20,32.4 40,32.4 S 90,3.6 140,3.6 S 190,16.2 240,16.2 S 290,36 340,36 S 390,21.6 440,21.6 S 480,25 500,25" fill="none" stroke="var(--primary-color)" stroke-width="3" stroke-linecap="round" />
+                    
+                    <path class="area-path" d="M 0,40 S 20,32.4 40,32.4 S 90,3.6 140,3.6 S 190,16.2 240,16.2 S 290,36 340,36 S 390,21.6 440,21.6 S 480,25 500,25 V 180 H 0 Z" fill="url(#area-gradient)" />
+                    
+                    <!-- 渐变定义 -->
+                    <defs>
+                        <linearGradient id="area-gradient" x1="0" x2="0" y1="0" y2="1">
+                            <stop offset="0%" stop-color="rgba(72,105,243,0.3)"/>
+                            <stop offset="100%" stop-color="rgba(72,105,243,0.0)"/>
+                        </linearGradient>
+                    </defs>
+
+                    <!-- 交互节点 1: 04:00 (82%) -->
+                    <g class="chart-point">
+                        <line x1="40" y1="32.4" x2="40" y2="180" class="hover-line" />
+                        <circle class="point-circle" cx="40" cy="32.4" r="4" fill="var(--primary-color)"/>
+                        <g class="tooltip-box">
+                            <rect x="0" y="-12" width="80" height="30" rx="4" fill="rgba(30,30,30,0.85)"/>
+                            <polygon points="35,18 45,18 40,24" fill="rgba(30,30,30,0.85)" />
+                            <text x="40" y="8" font-size="12" fill="#fff" text-anchor="middle">在线率: 82%</text>
+                        </g>
+                    </g>
+
+                    <!-- 交互节点 2: 08:00 (98%) -->
+                    <g class="chart-point">
+                        <line x1="140" y1="3.6" x2="140" y2="180" class="hover-line" />
+                        <circle class="point-circle" cx="140" cy="3.6" r="4" fill="var(--primary-color)"/>
+                        <g class="tooltip-box">
+                            <rect x="100" y="-40" width="80" height="30" rx="4" fill="rgba(30,30,30,0.85)"/>
+                            <polygon points="135,-10 145,-10 140,-4" fill="rgba(30,30,30,0.85)" />
+                            <text x="140" y="-20" font-size="12" fill="#fff" text-anchor="middle">在线率: 98%</text>
+                        </g>
+                    </g>
+
+                    <!-- 交互节点 3: 12:00 (91%) -->
+                    <g class="chart-point">
+                        <line x1="240" y1="16.2" x2="240" y2="180" class="hover-line" />
+                        <circle class="point-circle" cx="240" cy="16.2" r="4" fill="var(--primary-color)"/>
+                        <g class="tooltip-box">
+                            <rect x="200" y="-28" width="80" height="30" rx="4" fill="rgba(30,30,30,0.85)"/>
+                            <polygon points="235,2 245,2 240,8" fill="rgba(30,30,30,0.85)" />
+                            <text x="240" y="-8" font-size="12" fill="#fff" text-anchor="middle">在线率: 91%</text>
+                        </g>
+                    </g>
+                    
+                    <!-- 交互节点 4: 16:00 (80%) -->
+                    <g class="chart-point">
+                        <line x1="340" y1="36" x2="340" y2="180" class="hover-line" />
+                        <circle class="point-circle" cx="340" cy="36" r="4" fill="var(--primary-color)"/>
+                        <g class="tooltip-box">
+                            <rect x="300" y="-8" width="80" height="30" rx="4" fill="rgba(30,30,30,0.85)"/>
+                            <polygon points="335,22 345,22 340,28" fill="rgba(30,30,30,0.85)" />
+                            <text x="340" y="12" font-size="12" fill="#fff" text-anchor="middle">在线率: 80%</text>
+                        </g>
+                    </g>
+
+                    <!-- 交互节点 5: 20:00 (88%) -->
+                    <g class="chart-point">
+                        <line x1="440" y1="21.6" x2="440" y2="180" class="hover-line" />
+                        <circle class="point-circle" cx="440" cy="21.6" r="4" fill="var(--primary-color)"/>
+                        <g class="tooltip-box">
+                            <rect x="400" y="-22" width="80" height="30" rx="4" fill="rgba(30,30,30,0.85)"/>
+                            <polygon points="435,8 445,8 440,14" fill="rgba(30,30,30,0.85)" />
+                            <text x="440" y="-2" font-size="12" fill="#fff" text-anchor="middle">在线率: 88%</text>
+                        </g>
+                    </g>
+                </svg>
+            </div>
+        </div>
+
+        <!-- 排行榜 -->
+        <div class="chart-card">
+            <div class="chart-title">
+                各单位平均在线率排行
+                <div style="display:flex; gap:8px;">
+                    <button id="btnRed" class="btn-primary" style="padding:2px 10px; height: 26px; font-size:12px; border-radius: 2px;" onclick="switchRanking('red')">红榜</button>
+                    <button id="btnBlack" style="padding:2px 10px; height: 26px; font-size:12px; border-radius: 2px; color: #666;" onclick="switchRanking('black')">黑榜</button>
+                </div>
+            </div>
+            
+            <div class="chart-content" style="align-items: flex-start;">
+                <!-- 红榜内容 -->
+                <div id="redBoard" class="bar-ranking">
+                    <div class="bar-item">
+                        <div class="bar-label"><span>1. 天河供电局</span><span>98.2%</span></div>
+                        <div class="bar-progress"><div class="bar-fill" style="width:98.2%; background: var(--primary-color);"></div></div>
+                    </div>
+                    <div class="bar-item">
+                        <div class="bar-label"><span>2. 海珠供电局</span><span>95.4%</span></div>
+                        <div class="bar-progress"><div class="bar-fill" style="width:95.4%; background: var(--primary-color); opacity: 0.9;"></div></div>
+                    </div>
+                    <div class="bar-item">
+                        <div class="bar-label"><span>3. 越秀供电局</span><span>92.1%</span></div>
+                        <div class="bar-progress"><div class="bar-fill" style="width:92.1%; background: var(--primary-color); opacity: 0.8;"></div></div>
+                    </div>
+                    <div class="bar-item">
+                        <div class="bar-label"><span>4. 荔湾供电局</span><span>88.7%</span></div>
+                        <div class="bar-progress"><div class="bar-fill" style="width:88.7%; background: var(--primary-color); opacity: 0.7;"></div></div>
+                    </div>
+                    <div class="bar-item">
+                        <div class="bar-label"><span>5. 番禺供电局</span><span>85.0%</span></div>
+                        <div class="bar-progress"><div class="bar-fill" style="width:85.0%; background: var(--primary-color); opacity: 0.6;"></div></div>
+                    </div>
+                </div>
+
+                <!-- 黑榜内容 (默认隐藏) -->
+                <div id="blackBoard" class="bar-ranking" style="display:none;">
+                    <div class="bar-item">
+                        <div class="bar-label"><span>1. 从化供电局</span><span>42.1%</span></div>
+                        <div class="bar-progress"><div class="bar-fill" style="width:42.1%; background: #ff4d4f;"></div></div>
+                    </div>
+                    <div class="bar-item">
+                        <div class="bar-label"><span>2. 增城供电局</span><span>55.3%</span></div>
+                        <div class="bar-progress"><div class="bar-fill" style="width:55.3%; background: #ff4d4f; opacity: 0.9;"></div></div>
+                    </div>
+                    <div class="bar-item">
+                        <div class="bar-label"><span>3. 花都供电局</span><span>61.2%</span></div>
+                        <div class="bar-progress"><div class="bar-fill" style="width:61.2%; background: #ff4d4f; opacity: 0.8;"></div></div>
+                    </div>
+                    <div class="bar-item">
+                        <div class="bar-label"><span>4. 南沙供电局</span><span>68.5%</span></div>
+                        <div class="bar-progress"><div class="bar-fill" style="width:68.5%; background: #faad14;"></div></div>
+                    </div>
+                    <div class="bar-item">
+                        <div class="bar-label"><span>5. 白云供电局</span><span>72.4%</span></div>
+                        <div class="bar-progress"><div class="bar-fill" style="width:72.4%; background: #faad14; opacity: 0.8;"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. 设备在线数据清单 -->
+    <section class="table-section">
+        <div class="chart-title" style="margin-bottom:15px; font-size:16px;">设备在线数据清单</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>终端名称</th>
+                    <th>物联标识码</th>
+                    <th>终端类型</th>
+                    <th>电鸿终端</th>
+                    <th>所属单位</th>
+                    <th>部署节点</th>
+                    <th>在线次数</th>
+                    <th>在线总时长</th>
+                    <th>在线时长占比</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Color1219测试的子...</td>
+                    <td>Mock1219-23428...</td>
+                    <td>子终端</td>
+                    <td><span class="tag">否</span></td>
+                    <td>中国南方电网有限...</td>
+                    <td>新一代EMOX节点</td>
+                    <td>12</td>
+                    <td>23h 15m</td>
+                    <td style="color:var(--primary-color); font-weight:bold">96.88%</td>
+                </tr>
+                <tr>
+                    <td>配电站门状态3</td>
+                    <td>WFPM503D2504X...</td>
+                    <td>子终端</td>
+                    <td><span class="tag">否</span></td>
+                    <td>珠海供电局</td>
+                    <td>珠海局-III区</td>
+                    <td>5</td>
+                    <td>21h 05m</td>
+                    <td style="color:var(--primary-color); font-weight:bold">87.85%</td>
+                </tr>
+                <tr>
+                    <td>温湿度传感器</td>
+                    <td>50312312L00916_...</td>
+                    <td>子终端</td>
+                    <td><span class="tag">否</span></td>
+                    <td>广州黄埔供电局</td>
+                    <td>广州局III区</td>
+                    <td>45</td>
+                    <td>15h 30m</td>
+                    <td style="color:var(--primary-color); font-weight:bold">64.58%</td>
+                </tr>
+                <tr>
+                    <td>广东-广州-海珠供电...</td>
+                    <td>030001301120110...</td>
+                    <td>直连终端</td>
+                    <td><span class="tag tag-blue">是</span></td>
+                    <td>广州海珠供电局</td>
+                    <td>广州局III区</td>
+                    <td>2</td>
+                    <td>23h 55m</td>
+                    <td style="color:var(--primary-color); font-weight:bold">99.65%</td>
+                </tr>
+                <tr>
+                    <td>汕头-110kV-溪东线...</td>
+                    <td>JSL-NK4238-6803...</td>
+                    <td>子终端</td>
+                    <td><span class="tag">否</span></td>
+                    <td>汕头供电局</td>
+                    <td>广东-III区</td>
+                    <td>120</td>
+                    <td>5h 20m</td>
+                    <td style="color:var(--primary-color); font-weight:bold">22.22%</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="pagination">
+            <div>共 1403502 条 &nbsp;&nbsp; 
+                <select style="border:1px solid #ddd; padding:4px; border-radius:4px; outline:none; color: #666;">
+                    <option>10条/页</option>
+                    <option selected>20条/页</option>
+                </select>
+            </div>
+            <div class="page-btns">
+                <div class="page-btn"> &lt; </div>
+                <div class="page-btn active">1</div>
+                <div class="page-btn">2</div>
+                <div class="page-btn">3</div>
+                <div class="page-btn">4</div>
+                <div class="page-btn" style="border:none;">...</div>
+                <div class="page-btn">70176</div>
+                <div class="page-btn"> &gt; </div>
+                <div style="display:flex; align-items:center; margin-left:10px;">
+                    前往 <input type="text" value="1" style="width:40px; height:32px; text-align:center; margin:0 8px; border:1px solid #ddd; border-radius:4px;"> 页
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+    function toggleAdvanced() {
+        const area = document.getElementById('advancedArea');
+        if (area.style.display === 'flex') {
+            area.style.display = 'none';
+        } else {
+            area.style.display = 'flex';
+        }
+    }
+
+    function switchRanking(type) {
+        const redBtn = document.getElementById('btnRed');
+        const blackBtn = document.getElementById('btnBlack');
+        const redBoard = document.getElementById('redBoard');
+        const blackBoard = document.getElementById('blackBoard');
+
+        if (type === 'red') {
+            redBtn.className = 'btn-primary';
+            redBtn.style.color = '#fff';
+            blackBtn.className = '';
+            blackBtn.style.color = '#666';
+            
+            redBoard.style.display = 'flex';
+            blackBoard.style.display = 'none';
+        } else {
+            blackBtn.className = 'btn-primary';
+            blackBtn.style.color = '#fff';
+            redBtn.className = '';
+            redBtn.style.color = '#666';
+            
+            blackBoard.style.display = 'flex';
+            redBoard.style.display = 'none';
+        }
+    }
+</script>
+
+</body>
+</html>
