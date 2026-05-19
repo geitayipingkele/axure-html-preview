@@ -1,0 +1,811 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设备日志管理系统</title>
+    <style>
+        :root {
+            --primary-color: #4869F3;
+            --primary-hover: #3855D0;
+            --bg-color: #FFFFFF;
+            --text-color: #333333; /* 恢复为深灰偏黑，避免纯黑过于刺眼 */
+            --border-color: #D9D9D9;
+            --gray-bg: #F5F7FA;
+            --transition: all 0.3s ease;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background-color: #F0F2F5;
+            color: var(--text-color);
+            line-height: 1.5;
+            padding: 10px;
+        }
+
+        .container {
+            background: var(--bg-color);
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            min-height: calc(100vh - 20px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Tabs 样式 */
+        .tabs-header {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 24px;
+            background: #fff;
+            flex-shrink: 0;
+        }
+
+        .tab-item {
+            padding: 14px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            color: #666;
+            position: relative;
+            transition: var(--transition);
+        }
+
+        .tab-item:hover { color: var(--primary-color); }
+
+        .tab-item.active {
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+
+        .tab-item.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: var(--primary-color);
+        }
+
+        /* 页面内容区 */
+        .tab-content { display: none; padding: 16px; flex-direction: column; flex: 1; }
+        .tab-content.active { display: flex; }
+
+        /* 查询区样式 */
+        .query-section {
+            background: #fff;
+            margin-bottom: 16px;
+            flex-shrink: 0;
+        }
+
+        .query-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .query-filters {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: nowrap;
+        }
+
+        .query-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .query-item label {
+            font-size: 13px;
+            color: var(--text-color);
+        }
+
+        .query-item input[type="text"], .query-item select {
+            height: 32px;
+            padding: 4px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            outline: none;
+            font-size: 13px;
+            color: var(--text-color);
+            background-color: #fff;
+            min-width: 150px;
+        }
+
+        .query-item input:focus, .query-item select:focus {
+            border-color: var(--primary-color);
+        }
+
+        /* 高级筛选折叠区样式 */
+        .advanced-fields {
+            display: none;
+            margin-top: 12px;
+            padding: 16px;
+            background-color: #FAFAFA;
+            border: 1px dashed var(--border-color);
+            border-radius: 4px;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            position: relative;
+        }
+        
+        .advanced-fields .collapse-row {
+            width: 100%;
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 8px;
+        }
+
+        /* 按钮样式 */
+        .actions-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        button {
+            cursor: pointer;
+            height: 32px;
+            padding: 0 16px;
+            border-radius: 4px;
+            font-size: 13px;
+            border: 1px solid var(--border-color);
+            background: #fff;
+            color: var(--text-color);
+            transition: var(--transition);
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        button:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: #fff;
+            border-color: var(--primary-color);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+            color: #fff;
+        }
+
+        /* 表格容器样式 */
+        .table-container {
+            flex: 1;
+            overflow: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: #fff;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th, td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #E8E8E8;
+            text-align: left;
+            color: var(--text-color);
+        }
+
+        th {
+            background: var(--gray-bg);
+            font-weight: 600;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        td {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 300px; /* 防止内容过长撑破表格 */
+        }
+
+        tr:hover td {
+            background-color: #F8FAFF;
+        }
+        
+        .checkbox-col {
+            width: 40px;
+            text-align: center;
+        }
+        
+        /* 操作列链接样式 - 匹配红框“查看/详情” */
+        .action-link {
+            color: var(--primary-color);
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .action-link:hover { text-decoration: underline; }
+
+        /* 分页组件样式 */
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 14px;
+            font-size: 13px;
+            color: #666;
+            flex-shrink: 0;
+        }
+
+        .page-actions { display: flex; align-items: center; gap: 6px; }
+        .page-btn {
+            width: 32px; height: 32px;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer;
+            background: #fff;
+        }
+        .page-btn.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+        .page-btn:hover:not(.active) { border-color: var(--primary-color); color: var(--primary-color); }
+        
+        .page-select {
+            height: 32px; padding: 0 4px; border: 1px solid var(--border-color); border-radius: 4px; outline: none;
+        }
+        
+        .page-goto input {
+            width: 45px; height: 32px; text-align: center; border: 1px solid var(--border-color); border-radius: 4px; margin: 0 4px; outline: none;
+        }
+
+        .status-tag { font-weight: bold; }
+        .online { color: #52c41a; }
+        .offline { color: #ff4d4f; }
+
+        /* ------------------- 弹窗 (Modal) 样式 ------------------- */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .modal-container {
+            background: #fff;
+            width: 600px;
+            max-width: 90vw;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            max-height: 80vh;
+        }
+        
+        /* 针对API日志内容可能很多，适度放宽 */
+        .modal-container.large { width: 750px; } 
+
+        .modal-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title { font-size: 16px; font-weight: 600; color: #333; }
+
+        .modal-close {
+            cursor: pointer;
+            font-size: 20px;
+            color: #999;
+            transition: color 0.2s;
+            line-height: 1;
+        }
+
+        .modal-close:hover { color: #333; }
+
+        .modal-body {
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        /* 详情项展示样式：两列布局或一列布局 */
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px 24px;
+        }
+        
+        .detail-grid.single-col { grid-template-columns: 1fr; }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .detail-item.full-width { grid-column: span 2; }
+
+        .detail-label {
+            font-size: 13px;
+            color: #888;
+        }
+
+        .detail-value {
+            font-size: 14px;
+            color: #333;
+            word-break: break-all;
+            background: #f9f9f9;
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #eee;
+            min-height: 36px;
+        }
+        
+        /* 长文本区 (如请求参数/响应参数) */
+        .detail-value.code-block {
+            font-family: Consolas, monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+            background: #f5f5f5;
+        }
+
+        .modal-footer {
+            padding: 12px 24px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Tabs 导航头部 -->
+    <div class="tabs-header">
+        <div id="tab-btn-status" class="tab-item active" onclick="switchTab('status')">设备状态日志</div>
+        <div id="tab-btn-operation" class="tab-item" onclick="switchTab('operation')">设备操作日志</div>
+        <div id="tab-btn-api" class="tab-item" onclick="switchTab('api')">设备API日志</div>
+    </div>
+
+    <!-- ==================== 1. 设备状态日志 Tab ==================== -->
+    <div id="tab-content-status" class="tab-content active">
+        <div class="query-section">
+            <div class="query-row">
+                <div class="query-filters">
+                    <div class="query-item">
+                        <label>终端名称</label>
+                        <input type="text" placeholder="请输入终端名称">
+                    </div>
+                    <div class="query-item">
+                        <label>终端ID</label>
+                        <input type="text" placeholder="请输入终端ID">
+                    </div>
+                    <div class="query-item">
+                        <label>物联标识码</label>
+                        <input type="text" placeholder="请输入物联标识码">
+                    </div>
+                </div>
+                <div class="actions-bar">
+                    <button class="btn-primary">查询</button>
+                    <button onclick="clearFilters('tab-content-status')">重置</button>
+                    <button onclick="toggleAdvanced('adv-status', this)">高级筛选</button>
+                    <button>导出</button>
+                </div>
+            </div>
+            
+            <div id="adv-status" class="advanced-fields">
+                <div class="query-item">
+                    <label>设备状态</label>
+                    <select><option value="">请选择设备状态</option><option value="在线">在线</option><option value="离线">离线</option></select>
+                </div>
+                <div class="query-item">
+                    <label>状态来源</label>
+                    <select><option value="">请选择状态来源</option><option value="设备主动上报">设备主动上报</option><option value="设备心跳超时">设备心跳超时</option><option value="南向服务异常">南向服务异常</option></select>
+                </div>
+                <div class="query-item">
+                    <label>选择时间</label>
+                    <input type="text" placeholder="开始时间 - 结束时间" style="min-width: 280px;">
+                </div>
+                <div class="collapse-row">
+                    <button onclick="toggleAdvanced('adv-status', document.querySelector('#tab-content-status .actions-bar button:nth-child(3)'))">收起 ^</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="checkbox-col"><input type="checkbox"></th>
+                        <th>终端名称</th>
+                        <th>终端ID</th>
+                        <th>物联标识码</th>
+                        <th>IP地址</th>
+                        <th>设备状态</th>
+                        <th>状态来源</th>
+                        <th>时间</th>
+                        <th>操作</th> <!-- 修改点：右侧增加操作列 -->
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="checkbox-col"><input type="checkbox"></td>
+                        <td>温度传感器111</td>
+                        <td>mqtt-lsy-1</td>
+                        <td>mqtt-lsy-1</td>
+                        <td>1.1.1.1</td>
+                        <td><span class="status-tag online">在线</span></td>
+                        <td>设备主动上报</td>
+                        <td>2026-05-18 16:48:57</td>
+                        <td><a class="action-link" onclick="openDetailModal('status', this)">详情</a></td>
+                    </tr>
+                    <tr>
+                        <td class="checkbox-col"><input type="checkbox"></td>
+                        <td>湿度控制器-A2</td>
+                        <td>mqtt-lsy-2</td>
+                        <td>mqtt-lsy-2</td>
+                        <td>1.1.1.2</td>
+                        <td><span class="status-tag offline">离线</span></td>
+                        <td>设备心跳超时</td>
+                        <td>2026-05-18 17:12:00</td>
+                        <td><a class="action-link" onclick="openDetailModal('status', this)">详情</a></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="pagination">
+            <div>共 2 条记录 &nbsp; <select class="page-select"><option>20条/页</option></select></div>
+            <div class="page-actions">
+                <div class="page-btn">&lt;</div><div class="page-btn active">1</div><div class="page-btn">&gt;</div>
+                <div class="page-goto">前往<input type="text" value="1">页</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 2. 设备操作日志 Tab ==================== -->
+    <div id="tab-content-operation" class="tab-content">
+        <div class="query-section">
+            <div class="query-row">
+                <div class="query-filters">
+                    <div class="query-item"><label>终端名称</label><input type="text" placeholder="请输入终端名称"></div>
+                    <div class="query-item"><label>终端ID</label><input type="text" placeholder="请输入终端ID"></div>
+                    <div class="query-item"><label>物联标识码</label><input type="text" placeholder="请输入物联标识码"></div>
+                </div>
+                <div class="actions-bar">
+                    <button class="btn-primary">查询</button>
+                    <button onclick="clearFilters('tab-content-operation')">重置</button>
+                    <button onclick="toggleAdvanced('adv-operation', this)">高级筛选</button>
+                    <button>导出</button>
+                </div>
+            </div>
+            
+            <div id="adv-operation" class="advanced-fields">
+                <div class="query-item"><label>操作类型</label><select style="min-width: 200px;"><option value="">请选择操作类型</option><option>参数配置</option></select></div>
+                <div class="query-item"><label>响应状态</label><select><option value="">请选择</option><option>成功</option><option>失败</option></select></div>
+                <div class="query-item"><label>操作账号</label><input type="text" placeholder="请输入操作账号"></div>
+                <div class="query-item"><label>操作时间</label><input type="text" placeholder="开始时间 - 结束时间" style="min-width: 280px;"></div>
+                <div class="collapse-row"><button onclick="toggleAdvanced('adv-operation', document.querySelector('#tab-content-operation .actions-bar button:nth-child(3)'))">收起 ^</button></div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="checkbox-col"><input type="checkbox"></th>
+                        <th>终端名称</th>
+                        <th>终端ID</th>
+                        <th>物联标识码</th>
+                        <th>IP地址</th>
+                        <th>操作类型</th>
+                        <th>操作记录</th>
+                        <th>操作时间</th>
+                        <th>操作状态</th>
+                        <th>失败原因</th>
+                        <th>操作</th> <!-- 修改点：右侧增加操作列 -->
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="checkbox-col"><input type="checkbox"></td>
+                        <td>温度传感器111</td>
+                        <td>mqtt-lsy-1</td>
+                        <td>mqtt-lsy-1</td>
+                        <td>1.1.1.1</td>
+                        <td>参数配置</td>
+                        <td>修改心跳周期为60s</td>
+                        <td>2026-05-18 16:48:57</td>
+                        <td>成功</td>
+                        <td>--</td>
+                        <td><a class="action-link" onclick="openDetailModal('operation', this)">详情</a></td>
+                    </tr>
+                     <tr>
+                        <td class="checkbox-col"><input type="checkbox"></td>
+                        <td>温度传感器111</td>
+                        <td>mqtt-lsy-1</td>
+                        <td>mqtt-lsy-1</td>
+                        <td>1.1.1.1</td>
+                        <td>终端影子-命令下发</td>
+                        <td>重启设备</td>
+                        <td>2026-05-18 17:00:00</td>
+                        <td>失败</td>
+                        <td>设备离线，指令下发超时</td>
+                        <td><a class="action-link" onclick="openDetailModal('operation', this)">详情</a></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="pagination">
+            <div>共 2 条记录 &nbsp; <select class="page-select"><option>20条/页</option></select></div>
+            <div class="page-actions">
+                <div class="page-btn">&lt;</div><div class="page-btn active">1</div><div class="page-btn">&gt;</div>
+                <div class="page-goto">前往<input type="text" value="1">页</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 3. 设备API日志 Tab ==================== -->
+    <div id="tab-content-api" class="tab-content">
+        <div class="query-section">
+            <div class="query-row">
+                <div class="query-filters">
+                    <div class="query-item"><label>终端名称</label><input type="text" placeholder="请输入终端名称"></div>
+                    <div class="query-item"><label>终端ID</label><input type="text" placeholder="请输入终端ID"></div>
+                    <div class="query-item"><label>物联标识码</label><input type="text" placeholder="请输入物联标识码"></div>
+                </div>
+                <div class="actions-bar">
+                    <button class="btn-primary">查询</button>
+                    <button onclick="clearFilters('tab-content-api')">重置</button>
+                    <button onclick="toggleAdvanced('adv-api', this)">高级筛选</button>
+                    <button>导出</button>
+                </div>
+            </div>
+            
+            <div id="adv-api" class="advanced-fields">
+                <div class="query-item"><label>接口名称</label><input type="text" placeholder="请输入"></div>
+                <div class="query-item"><label>接口类型</label><select><option value="">请选择</option><option>视频播放</option></select></div>
+                <div class="query-item"><label>调用结果</label><select><option value="">请选择</option><option>成功</option><option>失败</option></select></div>
+                <div class="query-item"><label>应用名称</label><input type="text" placeholder="请输入"></div>
+                <div class="query-item"><label>操作时间</label><input type="text" placeholder="开始时间 - 结束时间"></div>
+                <div class="collapse-row"><button onclick="toggleAdvanced('adv-api', document.querySelector('#tab-content-api .actions-bar button:nth-child(3)'))">收起 ^</button></div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="checkbox-col"><input type="checkbox"></th>
+                        <th>终端名称</th>
+                        <th>终端ID</th>
+                        <th>物联标识码</th>
+                        <th>请求IP</th>
+                        <th>接口名称</th>
+                        <th>接口类型</th>
+                        <th>API路径</th>
+                        <th>请求时间</th>
+                        <th>请求参数</th>
+                        <th>响应时间</th>
+                        <th>响应参数</th>
+                        <th>调用结果</th>
+                        <th>失败原因</th>
+                        <th>应用账号</th>
+                        <th>应用名称</th>
+                        <th>操作</th> <!-- 修改点：右侧增加操作列 -->
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="checkbox-col"><input type="checkbox"></td>
+                        <td>温度传感器111</td>
+                        <td>mqtt-lsy-1</td>
+                        <td>mqtt-lsy-1</td>
+                        <td>1.1.1.1</td>
+                        <td>获取rtsp流</td>
+                        <td>视频播放</td>
+                        <td>/batch/queryDeviceInfo</td>
+                        <td>2026-05-18 16:48:57</td>
+                        <td>{"streamType":1}</td>
+                        <td>2026-05-18 16:48:57</td>
+                        <td>{"code":200,"url":"rtsp://..."}</td>
+                        <td>成功</td>
+                        <td>--</td>
+                        <td>app_user_01</td>
+                        <td>运检测系统</td>
+                        <td><a class="action-link" onclick="openDetailModal('api', this)">详情</a></td>
+                    </tr>
+                    <tr>
+                        <td class="checkbox-col"><input type="checkbox"></td>
+                        <td>湿度传感器-A3</td>
+                        <td>mqtt-lsy-3</td>
+                        <td>mqtt-lsy-3</td>
+                        <td>1.1.1.3</td>
+                        <td>获取实时数据</td>
+                        <td>运维检测</td>
+                        <td>/api/v1/getRealData</td>
+                        <td>2026-05-18 17:05:12</td>
+                        <td>{"deviceId":"mqtt-lsy-3"}</td>
+                        <td>2026-05-18 17:05:15</td>
+                        <td>{"code":500,"msg":"timeout"}</td>
+                        <td>失败</td>
+                        <td>网关响应超时</td>
+                        <td>app_user_02</td>
+                        <td>综合监控平台</td>
+                        <td><a class="action-link" onclick="openDetailModal('api', this)">详情</a></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="pagination">
+            <div>共 2 条记录 &nbsp; <select class="page-select"><option>20条/页</option></select></div>
+            <div class="page-actions">
+                <div class="page-btn">&lt;</div><div class="page-btn active">1</div><div class="page-btn">&gt;</div>
+                <div class="page-goto">前往<input type="text" value="1">页</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 统一弹窗结构 ==================== -->
+<div id="detailModal" class="modal-overlay">
+    <div class="modal-container" id="modalContainer">
+        <div class="modal-header">
+            <div class="modal-title" id="modalTitle">日志详情</div>
+            <div class="modal-close" onclick="closeModal()">×</div>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <!-- 弹窗内容将由 JS 动态渲染 -->
+        </div>
+    </div>
+</div>
+
+<script>
+    // Tab 切换
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-item').forEach(item => item.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+        document.getElementById('tab-btn-' + tabId).classList.add('active');
+        document.getElementById('tab-content-' + tabId).classList.add('active');
+    }
+
+    // 高级筛选显示/隐藏
+    function toggleAdvanced(areaId, btnElement) {
+        const area = document.getElementById(areaId);
+        if (area.style.display === 'flex') {
+            area.style.display = 'none';
+        } else {
+            area.style.display = 'flex';
+        }
+    }
+
+    // 重置过滤条件
+    function clearFilters(tabContentId) {
+        const container = document.getElementById(tabContentId);
+        container.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
+        container.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
+    }
+
+    // ------------------- 弹窗逻辑 ------------------- //
+    const modalOverlay = document.getElementById('detailModal');
+    const modalBody = document.getElementById('modalBody');
+    const modalContainer = document.getElementById('modalContainer');
+
+    function openDetailModal(logType, btnElement) {
+        // 1. 获取当前点击行的 <tr> 元素
+        const tr = btnElement.closest('tr');
+        const tds = tr.querySelectorAll('td');
+        
+        // 2. 根据不同的日志类型，按照《文档要求》渲染详情字段
+        let htmlContent = '';
+        
+        if (logType === 'status') {
+            modalContainer.className = 'modal-container'; // 恢复默认宽度
+            // 终端名称(1), 终端ID(2), 设备状态(5纯文本), 状态来源(6), 时间(7)
+            const statusText = tds[5].innerText.trim();
+            htmlContent = `
+                <div class="detail-grid">
+                    <div class="detail-item"><div class="detail-label">终端名称</div><div class="detail-value">${tds[1].innerText}</div></div>
+                    <div class="detail-item"><div class="detail-label">终端ID</div><div class="detail-value">${tds[2].innerText}</div></div>
+                    <div class="detail-item"><div class="detail-label">设备状态</div><div class="detail-value">${statusText}</div></div>
+                    <div class="detail-item"><div class="detail-label">状态来源</div><div class="detail-value">${tds[6].innerText}</div></div>
+                    <div class="detail-item"><div class="detail-label">时间</div><div class="detail-value">${tds[7].innerText}</div></div>
+                </div>
+            `;
+        } 
+        else if (logType === 'operation') {
+            modalContainer.className = 'modal-container'; 
+            // 终端名称(1), 终端ID(2), 操作类型(5), 操作记录(6), 操作时间(7), 操作状态(8), 失败原因(9)
+            const opStatus = tds[8].innerText.trim();
+            
+            htmlContent = `
+                <div class="detail-grid">
+                    <div class="detail-item"><div class="detail-label">终端名称</div><div class="detail-value">${tds[1].innerText}</div></div>
+                    <div class="detail-item"><div class="detail-label">终端ID</div><div class="detail-value">${tds[2].innerText}</div></div>
+                    <div class="detail-item"><div class="detail-label">操作类型</div><div class="detail-value">${tds[5].innerText}</div></div>
+                    <div class="detail-item"><div class="detail-label">操作时间</div><div class="detail-value">${tds[7].innerText}</div></div>
+                    <div class="detail-item full-width"><div class="detail-label">操作记录</div><div class="detail-value">${tds[6].innerText}</div></div>
+                    <div class="detail-item"><div class="detail-label">操作状态</div><div class="detail-value">${opStatus}</div></div>
+            `;
+            // 当状态为失败时展示失败原因
+            if (opStatus === '失败') {
+                htmlContent += `<div class="detail-item full-width"><div class="detail-label" style="color:red;">失败原因</div><div class="detail-value">${tds[9].innerText}</div></div>`;
+            }
+            htmlContent += `</div>`;
+        }
+        else if (logType === 'api') {
+            modalContainer.className = 'modal-container large'; // API日志字段多，使用宽弹窗
+            // 终端名称(1), 终端ID(2), 调用结果(12), 失败原因(13), 应用账号(14), 应用名称(15)
+            // 接口名称(5), 接口类型(6), API路径(7), 请求时间(8), 请求参数(9), 响应时间(10), 响应参数(11)
+            const apiStatus = tds[12].innerText.trim();
+            
+            htmlContent = `
+                <div class="detail-grid">
+                    <div class="detail-item"><div class="detail-label">终端名称</div><div class="detail-value">${tds[1].innerText}</div></div>
+                    <div class="detail-item"><div class="detail-label">终端ID</div><div class="detail-value">${tds[2].innerText}</div></div>
+                    
+                    <div class="detail-item"><div class="detail-label">应用名称</div><div class="detail-value">${tds[15].innerText}</div></div>
+                    <div class="detail-item"><div class="detail-label">应用账号</div><div class="detail-value">${tds[14].innerText}</div></div>
+                    
+                    <div class="detail-item"><div class="detail-label">接口名称</div><div class="detail-value">${tds[5].innerText}</div></div>
+                    <div class="detail-item"><div class="detail-label">接口类型</div><div class="detail-value">${tds[6].innerText}</div></div>
+                    
+                    <div class="detail-item full-width"><div class="detail-label">API路径</div><div class="detail-value">${tds[7].innerText}</div></div>
+                    
+                    <div class="detail-item"><div class="detail-label">请求时间</div><div class="detail-value">${tds[8].innerText}</div></div>
+                    <div class="detail-item"><div class="detail-label">响应时间</div><div class="detail-value">${tds[10].innerText}</div></div>
+                    
+                    <div class="detail-item full-width"><div class="detail-label">请求参数</div><div class="detail-value code-block">${tds[9].innerText}</div></div>
+                    <div class="detail-item full-width"><div class="detail-label">响应参数</div><div class="detail-value code-block">${tds[11].innerText}</div></div>
+                    
+                    <div class="detail-item"><div class="detail-label">调用结果</div><div class="detail-value">${apiStatus}</div></div>
+            `;
+            // 当状态为失败时展示失败原因
+            if (apiStatus === '失败') {
+                htmlContent += `<div class="detail-item"><div class="detail-label" style="color:red;">失败原因</div><div class="detail-value">${tds[13].innerText}</div></div>`;
+            }
+            htmlContent += `</div>`;
+        }
+
+        // 3. 渲染内容并显示弹窗
+        modalBody.innerHTML = htmlContent;
+        modalOverlay.classList.add('active');
+    }
+
+    function closeModal() {
+        modalOverlay.classList.remove('active');
+    }
+
+    // 点击蒙层也可以关闭弹窗
+    modalOverlay.addEventListener('click', function(e) {
+        if (e.target === modalOverlay) {
+            closeModal();
+        }
+    });
+</script>
+
+</body>
+</html>
