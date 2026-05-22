@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>接入节点拓扑控制台 v5.0</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        /* 上下左右边界的留白区域不能超过10px */
+        body {
+            margin: 8px; 
+            background-color: #e9ecf5;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+            height: calc(100vh - 16px);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            color: #333;
+        }
+
+        /* 顶部切换栏 */
+        .top-navbar {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 10px 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 100;
+            margin-bottom: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+
+        .selector-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #4a5568;
+            display: flex;
+            align-items: center;
+        }
+
+        /* ==================== 提示图标 Tooltip 样式 ==================== */
+        .tooltip-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background-color: #fff;
+            border: 1.5px solid #94a3b8;
+            color: #94a3b8;
+            font-size: 11px;
+            font-family: serif;
+            font-weight: bold;
+            font-style: italic;
+            cursor: help;
+            position: relative;
+            margin-left: 6px;
+            margin-right: 4px;
+            transition: all 0.2s;
+        }
+
+        .tooltip-icon:hover {
+            color: #3b82f6;
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+
+        /* Tooltip 文字主体 - 【修复左侧溢出问题】 */
+        .tooltip-icon::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            top: 100%;
+            /* 将定位锚点从 50% 居中改为贴近图标的左侧，向右展开 */
+            left: -16px; 
+            transform: none; /* 移除 translateX(-50%) 的居中偏移 */
+            margin-top: 8px;
+            background-color: rgba(30, 41, 59, 0.95);
+            color: #fff;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 400;
+            font-style: normal;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        /* Tooltip 向上小箭头 */
+        .tooltip-icon::before {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%); /* 箭头依然对齐到图标正中间 */
+            margin-top: 2px;
+            border-width: 0 6px 6px 6px;
+            border-style: solid;
+            border-color: transparent transparent rgba(30, 41, 59, 0.95) transparent;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease;
+            z-index: 1000;
+        }
+
+        /* Hover 触发动画 */
+        .tooltip-icon:hover::after {
+            opacity: 1;
+            visibility: visible;
+            margin-top: 12px;
+        }
+
+        .tooltip-icon:hover::before {
+            opacity: 1;
+            visibility: visible;
+            margin-top: 6px;
+        }
+        /* ========================================================= */
+
+        .custom-select {
+            padding: 6px 32px 6px 12px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #2d3748;
+            background-color: #fff;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234a5568'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 16px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .custom-select:hover { border-color: #94a3b8; }
+        .custom-select:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
+
+        /* 拓扑画布外壳 */
+        .topology-container {
+            flex: 1;
+            background: #eef2f7;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #dbe2eb;
+            cursor: grab;
+        }
+        .topology-container:active { cursor: grabbing; }
+
+        /* 视口与缩放平移层 */
+        .topology-viewport {
+            position: absolute;
+            transform-origin: 0 0;
+            left: 0;
+            top: 0;
+            display: inline-block;
+            will-change: transform;
+        }
+
+        /* 树形根容器 - 用于居中计算的准确物理包裹层 */
+        #tree-wrapper {
+            position: relative;
+            display: inline-block;
+            padding: 60px;
+        }
+
+        /* 核心修复：相对定位层，作为 SVG 和 HTML 的共同坐标系零点 */
+        .canvas-coordinate-origin {
+            position: relative;
+        }
+
+        /* SVG 连线层 - 完全覆盖坐标系 */
+        .svg-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: visible;
+            z-index: 1;
+        }
+
+        .topology-line {
+            fill: none;
+            stroke-width: 2px;
+            transition: stroke 0.3s ease;
+        }
+
+        .line-node-circle {
+            fill: #fff;
+            stroke-width: 2px;
+        }
+
+        /* 树形布局 DOM 结构 */
+        #tree-dom-layer {
+            position: relative;
+            z-index: 2;
+        }
+
+        .tree-level {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        .children-container {
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 48px;
+            margin-top: 64px;
+            position: relative;
+        }
+        .children-container.collapsed { display: none !important; }
+
+        /* 卡片样式 */
+        .node-card {
+            background: #ffffff;
+            width: 280px;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 4px 14px rgba(164, 177, 198, 0.25);
+            border: 1px solid #dbe2eb;
+            position: relative;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .node-card:hover { box-shadow: 0 6px 20px rgba(164, 177, 198, 0.4); transform: translateY(-2px); }
+        .node-card.status-offline { background: #fafafa; border-color: #d9d9d9; }
+
+        /* 状态展示 */
+        .zone-tag {
+            position: absolute;
+            top: -1px;  
+            left: -1px; 
+            font-size: 10px;
+            font-weight: bold;
+            color: #fff;
+            padding: 3px 8px;
+            border-radius: 8px 0 8px 0; 
+            z-index: 3;
+            box-shadow: 1px 1px 3px rgba(0,0,0,0.1);
+        }
+        .zone-tag.online { background-color: #52c41a; }
+        .zone-tag.exception { background-color: #ff4d4f; }
+        .zone-tag.offline { background-color: #bfbfbf; }
+
+        /* 卡片内部结构 */
+        .card-body {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .icon-container {
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            background: transparent;
+        }
+
+        .info-container { flex: 1; overflow: hidden; }
+        .node-name { font-size: 14px; font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .node-code { font-size: 11px; color: #64748b; margin-top: 2px; font-family: monospace; }
+
+        /* 数据矩阵 */
+        .data-grid {
+            display: flex;
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px dashed #f0f4f8;
+            font-size: 11px;
+        }
+        .data-item { flex: 1; }
+        .data-label { color: #94a3b8; margin-bottom: 2px; }
+        .data-value { font-weight: 600; color: #1e3a8a; }
+        .status-offline .data-value { color: #64748b; }
+
+        /* 折叠展开按钮 */
+        .toggle-btn {
+            position: absolute;
+            bottom: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            z-index: 10;
+            transition: all 0.2s;
+        }
+        .toggle-btn:hover { border-color: #3b82f6; color: #3b82f6; }
+        .toggle-btn::after { content: '−'; font-weight: bold; font-size: 14px; color: #64748b; }
+        .node-card.collapsed .toggle-btn::after { content: '+'; }
+
+        /* 详情抽屉/弹窗 */
+        .detail-modal {
+            position: fixed;
+            top: 24px;
+            right: -380px;
+            width: 360px;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+            border: 1px solid #e2e8f0;
+            padding: 20px;
+            z-index: 200;
+            transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .detail-modal.open { right: 24px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9; }
+        .modal-title-box { display: flex; align-items: center; gap: 8px; }
+        .modal-title { font-size: 16px; font-weight: 700; color: #0f172a; }
+        .status-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+        .badge-online { background: #e6ffed; color: #22863a; border: 1px solid #b7eb8f; }
+        .badge-exception { background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; }
+        .badge-offline { background: #f5f5f5; color: #595959; border: 1px solid #d9d9d9; }
+        .close-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: #94a3b8; line-height: 1; }
+        .close-btn:hover { color: #64748b; }
+        .prop-row { display: flex; margin-bottom: 10px; font-size: 13px; line-height: 1.5; }
+        .prop-label { width: 110px; color: #64748b; flex-shrink: 0; }
+        .prop-value { color: #1e293b; font-weight: 500; word-break: break-all; }
+        .prop-value.highlight { color: #1e3a8a; font-weight: 600; }
+
+        /* 复位/操作控制悬浮按钮 */
+        .canvas-controls {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            display: flex;
+            gap: 8px;
+            z-index: 80;
+        }
+        .control-btn {
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+            color: #475569;
+        }
+        .control-btn:hover { background: #f8fafc; border-color: #94a3b8; }
+    </style>
+</head>
+<body>
+
+    <!-- 顶部切换栏 -->
+    <div class="top-navbar">
+        <span class="selector-label">
+            接入节点
+            <!-- 新增提示图标与交互文案 -->
+            <span class="tooltip-icon" data-tooltip="为保证拓扑视图的完整性，当前仅可选择顶级接入节点。">i</span>
+            ：
+        </span>
+        <select id="topology-select" class="custom-select" onchange="handleTopologyChange()">
+            <!-- 选项通过JS动态生成 -->
+        </select>
+    </div>
+
+    <!-- 拓扑画布主区域 -->
+    <div class="topology-container" id="canvas-container">
+        <div class="topology-viewport" id="canvas-viewport">
+            <div id="tree-wrapper">
+                <div class="canvas-coordinate-origin" id="coord-origin">
+                    <svg class="svg-overlay" id="svg-layer"></svg>
+                    <div id="tree-dom-layer"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 画布悬浮控制 -->
+    <div class="canvas-controls">
+        <button class="control-btn" onclick="centerCanvas()">居中展示</button>
+    </div>
+
+    <!-- 详情弹窗 -->
+    <div class="detail-modal" id="detail-modal">
+        <div class="modal-header">
+            <div class="modal-title-box">
+                <span class="modal-title" id="m-name"></span>
+                <span class="status-badge" id="m-status-badge"></span>
+            </div>
+            <button class="close-btn" onclick="closeModal()">×</button>
+        </div>
+        <div id="modal-props-body">
+            <!-- 14项字段动态灌入 -->
+        </div>
+    </div>
+
+    <script>
+        const topologyData = {
+            "gd_power": {
+                name: "广东电网视频节点", code: "GD-VNODE-001", zone: "安全Ⅲ区", status: "online", deviceCount: 450, onlineCount: 412, onlineRate: "91.56%", type: "视频接入组件JSL", ip: "10.16.2.51", port: "8081", company: "广东电网", domain: "输电", preZone: "否", changeTime: "2026-05-12 08:30:00", remark: "广东电网核心一级骨干节点",
+                children: [
+                    {
+                        name: "广州局视频节点", code: "GZ-VNODE-02", zone: "安全Ⅲ区前置区", status: "online", deviceCount: 180, onlineCount: 175, onlineRate: "97.22%", type: "视频接入组件JSL", ip: "10.16.12.11", port: "8081", company: "广东电网", domain: "输电", preZone: "是", changeTime: "2026-05-20 14:15:00", remark: "主要接入汇聚级点",
+                        children: [
+                            {
+                                name: "天河分局视频节点", code: "GZ-TH-03", zone: "安全Ⅲ区", status: "online", deviceCount: 90, onlineCount: 88, onlineRate: "97.78%", type: "视频接入组件JSL", ip: "10.16.12.55", port: "8082", company: "广东电网", domain: "输电", preZone: "否", changeTime: "2026-05-21 09:00:00", remark: "天河监控节点",
+                                children: [
+                                    { name: "五山街道监控站", code: "GZ-TH-WS-04", zone: "专网区", status: "online", deviceCount: 40, onlineCount: 40, onlineRate: "100.00%", type: "视频接入组件JSL", ip: "10.16.12.121", port: "8083", company: "广东电网", domain: "输电", preZone: "否", changeTime: "2026-05-22 07:11:00", remark: "末端微型采集站" }
+                                ]
+                            },
+                            { name: "白云分局视频节点", code: "GZ-BY-03", zone: "安全Ⅳ区前置区", status: "exception", deviceCount: 90, onlineCount: 87, onlineRate: "96.67%", type: "视频接入组件JSL", ip: "10.16.14.22", port: "8081", company: "广东电网", domain: "输电", preZone: "是", changeTime: "2026-05-22 10:00:00", remark: "数据包缺失判定异常" }
+                        ]
+                    },
+                    {
+                        name: "中山局视频节点", code: "ZS-VNODE-02", zone: "安全Ⅲ区", status: "exception", deviceCount: 120, onlineCount: 110, onlineRate: "91.67%", type: "视频接入组件JSL", ip: "10.24.8.10", port: "8081", company: "广东电网", domain: "输电", preZone: "否", changeTime: "2026-05-19 17:40:00", remark: "存在字段间歇性空值",
+                        children: [
+                            { name: "石岐分局视频节点", code: "ZS-SQ-03", zone: "安全Ⅲ区", status: "online", deviceCount: 60, onlineCount: 58, onlineRate: "96.67%", type: "视频接入组件JSL", ip: "10.24.8.61", port: "8081", company: "广东电网", domain: "输电", preZone: "否", changeTime: "2026-05-22 08:00:00", remark: "独立链路正常" }
+                        ]
+                    },
+                    {
+                        name: "佛山局视频节点", code: "FS-VNODE-02", zone: "专网区", status: "offline", deviceCount: 150, onlineCount: 0, onlineRate: "0.00%", type: "视频接入组件JSL", ip: "10.32.4.12", port: "8081", company: "广东电网", domain: "输电", preZone: "否", changeTime: "2026-05-22 01:20:00", remark: "光纤链路中断导致断连",
+                        children: [
+                            { name: "南海分局视频节点", code: "FS-NH-03", zone: "安全Ⅲ区前置区", status: "online", deviceCount: 80, onlineCount: 74, onlineRate: "92.50%", type: "视频接入组件JSL", ip: "10.32.4.88", port: "8081", company: "广东电网", domain: "输电", preZone: "是", changeTime: "2026-05-22 01:20:00", remark: "受上级断连级联影响" }
+                        ]
+                    }
+                ]
+            },
+            "gx_power": {
+                name: "广西电网视频节点", code: "GX-VNODE-100", zone: "安全Ⅲ区", status: "online", deviceCount: 310, onlineCount: 302, onlineRate: "97.42%", type: "视频接入组件JSL", ip: "172.16.5.1", port: "8080", company: "广西电网", domain: "输电", preZone: "否", changeTime: "2026-05-10 12:00:00", remark: "广西区域骨干主接点",
+                children: [
+                    { name: "柳州局视频节点", code: "GX-LZ-02", zone: "安全Ⅲ区", status: "online", deviceCount: 110, onlineCount: 108, onlineRate: "98.18%", type: "视频接入组件JSL", ip: "172.16.22.4", port: "8081", company: "广西电网", domain: "输电", preZone: "否", changeTime: "2026-05-21 23:00:00", remark: "正常" },
+                    { name: "桂林局视频节点", code: "GX-GL-02", zone: "专网区", status: "exception", deviceCount: 90, onlineCount: 84, onlineRate: "93.33%", type: "视频接入组件JSL", ip: "172.16.45.9", port: "8081", company: "广西电网", domain: "输电", preZone: "否", changeTime: "2026-05-22 09:44:00", remark: "异常" },
+                    { name: "南宁局视频节点", code: "GX-NN-02", zone: "安全Ⅲ区前置区", status: "online", deviceCount: 110, onlineCount: 110, onlineRate: "100.00%", type: "视频接入组件JSL", ip: "172.16.11.2", port: "8081", company: "广西电网", domain: "输电", preZone: "是", changeTime: "2026-05-22 10:15:00", remark: "正常" }
+                ]
+            }
+        };
+
+        let transform = { x: 0, y: 0, scale: 1.0 };
+        let isDragging = false;
+        let startPan = { x: 0, y: 0 };
+        let activeNodeMap = {};
+
+        const container = document.getElementById('canvas-container');
+        const viewport = document.getElementById('canvas-viewport');
+        const svgLayer = document.getElementById('svg-layer');
+        const treeWrapper = document.getElementById('tree-wrapper');
+        const coordOrigin = document.getElementById('coord-origin');
+
+        window.onload = function() {
+            const selector = document.getElementById('topology-select');
+            for (let key in topologyData) {
+                let opt = document.createElement('option');
+                opt.value = key;
+                opt.innerText = topologyData[key].name;
+                selector.appendChild(opt);
+            }
+            selector.selectedIndex = 0;
+            initTopology(selector.value);
+            setupPanZoomListeners();
+            window.addEventListener('resize', centerCanvas);
+        };
+
+        function handleTopologyChange() {
+            closeModal();
+            const key = document.getElementById('topology-select').value;
+            initTopology(key);
+        }
+
+        function initTopology(key) {
+            const rawTreeData = JSON.parse(JSON.stringify(topologyData[key]));
+            applyCascadeOfflineRules(rawTreeData, false);
+            activeNodeMap = {};
+            buildNodeMap(rawTreeData);
+
+            const domLayer = document.getElementById('tree-dom-layer');
+            domLayer.innerHTML = renderTreeDOM(rawTreeData);
+
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        updateSvgLines();
+                        centerCanvas();
+                    }, 50);
+                });
+            });
+        }
+
+        function applyCascadeOfflineRules(node, parentIsOffline = false) {
+            if (parentIsOffline) { node.status = 'offline'; node.onlineRate = '0.00%'; node.onlineCount = 0; }
+            const currentIsOffline = (node.status === 'offline');
+            if (node.children && node.children.length > 0) {
+                node.children.forEach(child => applyCascadeOfflineRules(child, currentIsOffline));
+            }
+        }
+
+        function buildNodeMap(node) {
+            activeNodeMap[node.code] = node;
+            if (node.children && node.children.length > 0) {
+                node.children.forEach(child => buildNodeMap(child));
+            }
+        }
+
+        function renderTreeDOM(node) {
+            let statusClass = 'status-' + node.status;
+            let tagColorClass = node.status; 
+            let hasChildren = node.children && node.children.length > 0;
+            let toggleBtnHtml = hasChildren ? `<div class="toggle-btn" onclick="toggleNodeCollapse(event, '${node.code}')"></div>` : '';
+
+            let iconSvg = '';
+            if (node.status === 'online') {
+                iconSvg = `<svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="16" fill="#f6ffed" stroke="#b7eb8f" stroke-width="1.5"/><path d="M13 21l5 5 10-12" stroke="#52c41a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+            } else if (node.status === 'exception') {
+                iconSvg = `<svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="16" fill="#fff1f0" stroke="#ffa39e" stroke-width="1.5"/><path d="M20 12v10M20 26v.01" stroke="#ff4d4f" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+            } else {
+                iconSvg = `<svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="16" fill="#f5f5f5" stroke="#d9d9d9" stroke-width="1.5"/><path d="M12 20h16" stroke="#bfbfbf" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+            }
+
+            let html = `
+                <div class="tree-level" id="wrapper-${node.code}">
+                    <div class="node-card ${statusClass}" id="card-${node.code}" onclick="showNodeDetails('${node.code}')">
+                        <div class="zone-tag ${tagColorClass}">${node.zone}</div>
+                        <div class="card-body">
+                            <div class="icon-container">${iconSvg}</div>
+                            <div class="info-container">
+                                <div class="node-name" title="${node.name}">${node.name}</div>
+                                <div class="node-code">${node.code}</div>
+                            </div>
+                        </div>
+                        <div class="data-grid">
+                            <div class="data-item">
+                                <div class="data-label">设备数</div>
+                                <div class="data-value">${node.deviceCount}</div>
+                            </div>
+                            <div class="data-item">
+                                <div class="data-label">在线率</div>
+                                <div class="data-value">${node.onlineRate}</div>
+                            </div>
+                        </div>
+                        ${toggleBtnHtml}
+                    </div>
+            `;
+            if (hasChildren) {
+                html += `<div class="children-container" id="children-${node.code}">`;
+                node.children.forEach(child => { html += renderTreeDOM(child); });
+                html += `</div>`;
+            }
+            html += `</div>`;
+            return html;
+        }
+
+        function toggleNodeCollapse(event, nodeCode) {
+            event.stopPropagation();
+            const card = document.getElementById(`card-${nodeCode}`);
+            const childrenContainer = document.getElementById(`children-${nodeCode}`);
+
+            if (childrenContainer) {
+                if (childrenContainer.classList.contains('collapsed')) {
+                    childrenContainer.classList.remove('collapsed');
+                    card.classList.remove('collapsed');
+                } else {
+                    childrenContainer.classList.add('collapsed');
+                    card.classList.add('collapsed');
+                }
+                setTimeout(() => {
+                    updateSvgLines();
+                    centerCanvas();
+                }, 10);
+            }
+        }
+
+        function getRelativeBox(element) {
+            let x = 0; let y = 0; let w = element.offsetWidth; let h = element.offsetHeight;
+            let current = element;
+            while (current && current !== coordOrigin) {
+                x += current.offsetLeft;
+                y += current.offsetTop;
+                current = current.offsetParent;
+            }
+            return { x, y, w, h };
+        }
+
+        function updateSvgLines() {
+            svgLayer.innerHTML = ''; 
+            svgLayer.style.width = coordOrigin.offsetWidth + 'px';
+            svgLayer.style.height = coordOrigin.offsetHeight + 'px';
+
+            for (let code in activeNodeMap) {
+                const parentCard = document.getElementById(`card-${code}`);
+                const childrenBox = document.getElementById(`children-${code}`);
+
+                if (parentCard && childrenBox && !childrenBox.classList.contains('collapsed')) {
+                    const pBox = getRelativeBox(parentCard);
+                    const pX = pBox.x + pBox.w / 2;
+                    const pY = pBox.y + pBox.h; 
+
+                    const childWrappers = childrenBox.children;
+                    for (let i = 0; i < childWrappers.length; i++) {
+                        const childCard = childWrappers[i].querySelector('.node-card');
+                        if (!childCard) continue;
+
+                        const cBox = getRelativeBox(childCard);
+                        const cX = cBox.x + cBox.w / 2;
+                        const cY = cBox.y; 
+
+                        const childNodeData = activeNodeMap[childCard.id.replace('card-', '')];
+                        let lineColor = '#52c41a'; 
+                        if (childNodeData.status === 'exception') lineColor = '#ff4d4f'; 
+                        if (childNodeData.status === 'offline') lineColor = '#bfbfbf'; 
+
+                        const midY = pY + (cY - pY) * 0.45;
+                        const pathString = `M ${pX} ${pY} C ${pX} ${midY}, ${cX} ${cY - (cY - pY)*0.55}, ${cX} ${cY}`;
+
+                        const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        pathEl.setAttribute('d', pathString);
+                        pathEl.setAttribute('class', 'topology-line');
+                        pathEl.setAttribute('stroke', lineColor);
+                        svgLayer.appendChild(pathEl);
+
+                        const circleEl = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                        circleEl.setAttribute('cx', cX);
+                        circleEl.setAttribute('cy', pY + (cY - pY) * 0.5);
+                        circleEl.setAttribute('r', '4');
+                        circleEl.setAttribute('class', 'line-node-circle');
+                        circleEl.setAttribute('stroke', lineColor);
+                        svgLayer.appendChild(circleEl);
+                    }
+                }
+            }
+        }
+
+        function setupPanZoomListeners() {
+            container.addEventListener('mousedown', (e) => {
+                if (e.target.closest('.node-card') || e.target.closest('.top-navbar') || e.target.closest('.detail-modal') || e.target.closest('.control-btn')) return;
+                isDragging = true;
+                startPan = { x: e.clientX - transform.x, y: e.clientY - transform.y };
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                transform.x = e.clientX - startPan.x;
+                transform.y = e.clientY - startPan.y;
+                applyTransform();
+            });
+
+            window.addEventListener('mouseup', () => { isDragging = false; });
+            window.addEventListener('mouseleave', () => { isDragging = false; });
+
+            container.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomFactor = 0.05;
+                const oldScale = transform.scale;
+                
+                if (e.deltaY < 0) { transform.scale = Math.min(transform.scale + zoomFactor, 2.0); } 
+                else { transform.scale = Math.max(transform.scale - zoomFactor, 0.2); }
+                
+                const rect = container.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                transform.x = mouseX - (mouseX - transform.x) * (transform.scale / oldScale);
+                transform.y = mouseY - (mouseY - transform.y) * (transform.scale / oldScale);
+                applyTransform();
+            });
+        }
+
+        function applyTransform() {
+            viewport.style.transform = `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`;
+        }
+
+        function centerCanvas() {
+            const contW = container.clientWidth;
+            const contH = container.clientHeight;
+            const treeW = treeWrapper.offsetWidth;
+            const treeH = treeWrapper.offsetHeight;
+
+            if (treeW === 0 || treeH === 0) return;
+
+            let targetScale = Math.min((contW - 40) / treeW, (contH - 40) / treeH, 1);
+            if (targetScale < 0.2) targetScale = 0.2;
+
+            transform.scale = targetScale;
+            transform.x = (contW - treeW * targetScale) / 2;
+            transform.y = Math.max((contH - treeH * targetScale) / 2, 20); 
+
+            applyTransform();
+        }
+
+        function showNodeDetails(code) {
+            const node = activeNodeMap[code];
+            if (!node) return;
+
+            document.getElementById('m-name').innerText = node.name;
+            const badge = document.getElementById('m-status-badge');
+            
+            if (node.status === 'online') {
+                badge.innerText = '正常'; badge.className = 'status-badge badge-online';
+            } else if (node.status === 'exception') {
+                badge.innerText = '异常'; badge.className = 'status-badge badge-exception';
+            } else {
+                badge.innerText = '未连接'; badge.className = 'status-badge badge-offline';
+            }
+
+            const propsBody = document.getElementById('modal-props-body');
+            const fieldsDef = [
+                { label: '节点名称：', val: node.name }, { label: '节点状态：', val: badge.innerText },
+                { label: '节点类型：', val: node.type }, { label: '节点IP：', val: node.ip },
+                { label: '节点端口：', val: node.port }, { label: '所属单位：', val: node.company },
+                { label: '领域：', val: node.domain }, { label: '安全分区：', val: node.zone },
+                { label: '是否前置区：', val: node.preZone }, { label: '状态变更时间：', val: node.changeTime },
+                { label: '已接入终端数：', val: node.deviceCount, highlight: true },
+                { label: '在线数：', val: node.onlineCount, highlight: true },
+                { label: '在线率：', val: node.onlineRate, highlight: true },
+                { label: '备注：', val: node.remark }
+            ];
+
+            let propsHtml = '';
+            fieldsDef.forEach(f => {
+                let valClass = f.highlight ? 'prop-value highlight' : 'prop-value';
+                propsHtml += `<div class="prop-row"><div class="prop-label">${f.label}</div><div class="prop-value ${valClass}">${f.val}</div></div>`;
+            });
+
+            propsBody.innerHTML = propsHtml;
+            document.getElementById('detail-modal').classList.add('open');
+        }
+
+        function closeModal() { document.getElementById('detail-modal').classList.remove('open'); }
+    </script>
+</body>
+</html>
