@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台账对比记录</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* ------------------ 整体布局 (Flexbox弹性布局) ------------------ */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #ffffff;
+            color: #333333;
+            font-size: 13px;
+            /* 严格控制外围留白不超过10px */
+            padding: 10px;
+            margin: 0;
+            /* 充满整个视窗高度，实现列表向下拉伸 */
+            height: 100vh; 
+            display: flex;
+            flex-direction: column;
+            line-height: 1.5;
+            overflow: hidden; /* 防止body出现双滚动条，滚动交由table-section处理 */
+        }
+        
+        /* ------------------ 查询条件区 ------------------ */
+        .filter-section {
+            flex-shrink: 0; /* 保持自身高度，不被挤压 */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 0 10px 0; /* 仅保留底部的10px间距 */
+            background-color: #ffffff;
+        }
+        
+        .filter-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .filter-item label {
+            white-space: nowrap;
+            color: #606266;
+        }
+        
+        .filter-item input[type="text"], 
+        .filter-item select,
+        .filter-item input[type="datetime-local"] {
+            padding: 0 10px;
+            border: 1px solid #dcdfe6;
+            border-radius: 4px;
+            outline: none;
+            font-size: 13px;
+            height: 32px;
+            background-color: #ffffff;
+            color: #606266;
+            transition: border-color 0.2s;
+        }
+        
+        .filter-item input:focus, 
+        .filter-item select:focus {
+            border-color: #4869F3;
+        }
+
+        .filter-item input[type="text"] {
+            width: 160px;
+        }
+        
+        .filter-item select {
+            width: 120px;
+        }
+        
+        /* ------------------ 按钮样式 ------------------ */
+        .filter-right {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            background-color: #4869F3;
+            color: #ffffff;
+            border: 1px solid #4869F3;
+            padding: 0 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        .btn:hover {
+            background-color: #3554d1;
+            border-color: #3554d1;
+        }
+        .btn-secondary {
+            background-color: #ffffff;
+            color: #606266;
+            border: 1px solid #dcdfe6;
+        }
+        .btn-secondary:hover {
+            color: #4869F3;
+            border-color: #c6e2ff;
+            background-color: #ecf5ff;
+        }
+        
+        /* 列表内的文字按钮 */
+        .btn-text {
+            background: none;
+            border: none;
+            color: #4869F3;
+            cursor: pointer;
+            font-size: 13px;
+            padding: 0;
+            outline: none;
+        }
+        .btn-text:disabled {
+            color: #c0c4cc; 
+            cursor: not-allowed;
+            text-decoration: none !important;
+        }
+        .btn-text:hover:not(:disabled) {
+            text-decoration: underline;
+        }
+
+        /* ------------------ 数据列表区 (弹性拉伸 & 边框下延) ------------------ */
+        .table-section {
+            flex: 1; /* 自动撑满剩余垂直空间，实现底边向下延伸 */
+            width: 100%;
+            overflow: auto; /* 内容超出时内部滚动 */
+            border: 1px solid #ebeef5; /* 外侧大边框，即使没有数据也会包裹整个区域 */
+            background-color: #ffffff;
+            margin-bottom: 10px; /* 距离下方分页栏保持10px间距 */
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: center; 
+            min-width: 1000px;
+            /* 移除table自带边框，由外层.table-section控制，防止双边框 */
+            border: none; 
+        }
+        th, td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #ebeef5; 
+            border-right: 1px solid #ebeef5; 
+            color: #606266;
+            font-size: 13px;
+        }
+        /* 取消最右侧单元格的右边框，避免与容器边框重叠 */
+        th:last-child, td:last-child {
+            border-right: none;
+        }
+        /* 取消表头的上边框 */
+        table thead tr th {
+            border-top: none;
+        }
+        th {
+            background-color: #f5f7fa; 
+            font-weight: normal; 
+            color: #909399;
+            white-space: nowrap;
+            /* 保证表头在滚动时吸顶 */
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        /* 吸顶表头需要伪元素补充下边框（因为border collapse在sticky下有时会有兼容问题） */
+        th::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            border-bottom: 1px solid #ebeef5;
+        }
+        tr:hover td {
+            background-color: #f5f7fa; 
+        }
+
+        /* 状态点 */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-success { color: #67c23a; }
+        .status-success .status-dot { background-color: #67c23a; }
+        .status-failed { color: #f56c6c; }
+        .status-failed .status-dot { background-color: #f56c6c; }
+        .status-processing { color: #409eff; }
+        .status-processing .status-dot {
+            background-color: #409eff;
+            animation: pulse 1.2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+
+        /* ------------------ 分页区 (无边框，无底部矩形阴影) ------------------ */
+        .pagination-section {
+            flex-shrink: 0; /* 保持自身高度 */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            /* 移除原本的 border, box-shadow, 和过度的 padding */
+            padding: 0; 
+            background-color: transparent; /* 背景透明，融入大背景 */
+            color: #606266;
+            font-size: 13px;
+        }
+        .page-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .page-left select {
+            padding: 0 5px;
+            height: 28px;
+            border: 1px solid #dcdfe6;
+            border-radius: 4px;
+            outline: none;
+            color: #606266;
+            cursor: pointer;
+        }
+        .page-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .page-arrow {
+            cursor: pointer;
+            color: #c0c4cc; 
+            font-weight: bold;
+            user-select: none;
+            padding: 0 4px;
+        }
+        .page-arrow.active {
+            color: #606266;
+        }
+        .page-arrow.active:hover {
+            color: #4869F3;
+        }
+        .page-current {
+            color: #4869F3; 
+            font-weight: normal;
+            padding: 0 4px;
+        }
+        .page-goto {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: 10px;
+        }
+        .page-goto input {
+            width: 46px;
+            height: 28px;
+            text-align: center;
+            border: 1px solid #dcdfe6;
+            border-radius: 4px;
+            outline: none;
+            color: #606266;
+        }
+        .page-goto input:focus {
+            border-color: #4869F3;
+        }
+
+        /* ------------------ 侧边滑窗 (Drawer) ------------------ */
+        .drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            display: none;
+            z-index: 1000;
+        }
+        .drawer {
+            position: fixed;
+            top: 0;
+            right: -460px;
+            width: 450px;
+            height: 100%;
+            background: #ffffff;
+            box-shadow: -2px 0 8px rgba(0,0,0,0.15);
+            z-index: 1001;
+            transition: right 0.3s ease;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+        .drawer.open {
+            right: 0;
+        }
+        .drawer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #ebeef5;
+            padding-bottom: 12px;
+            margin-bottom: 15px;
+        }
+        .drawer-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #303133;
+        }
+        .drawer-diff-count {
+            font-size: 13px;
+            font-weight: bold;
+            color: #f56c6c;
+        }
+        .drawer-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #909399;
+            line-height: 1;
+        }
+        .drawer-close:hover {
+            color: #303133;
+        }
+        .drawer-content {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid #ebeef5;
+            border-radius: 4px;
+        }
+        
+        .badge-missing {
+            background-color: #fef0f0;
+            color: #f56c6c;
+            border: 1px solid #fde2e2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .badge-surplus {
+            background-color: #ecf5ff;
+            color: #409eff;
+            border: 1px solid #d9ecff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .no-data {
+            text-align: center;
+            color: #909399;
+            padding: 30px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 查询条件区 -->
+    <div class="filter-section">
+        <div class="filter-left">
+            <div class="filter-item">
+                <input type="text" id="searchNodeId" placeholder="请输入节点ID">
+            </div>
+            <div class="filter-item">
+                <input type="text" id="searchNodeName" placeholder="请输入节点名称">
+            </div>
+            <div class="filter-item">
+                <label>对比状态</label>
+                <select id="searchStatus">
+                    <option value="">请选择</option>
+                    <option value="成功">成功</option>
+                    <option value="失败">失败</option>
+                </select>
+            </div>
+            <div class="filter-item">
+                <label>对比开始时间</label>
+                <input type="datetime-local" id="timeStart">
+                <span style="color: #909399;">-</span>
+                <input type="datetime-local" id="timeEnd">
+            </div>
+        </div>
+        <div class="filter-right">
+            <button class="btn" onclick="filterData()">查询</button>
+            <button class="btn btn-secondary" onclick="resetFilters()">重置</button>
+        </div>
+    </div>
+
+    <!-- 数据列表区 -->
+    <div class="table-section">
+        <table id="recordsTable">
+            <thead>
+                <tr>
+                    <th>节点ID</th>
+                    <th>节点名称</th>
+                    <th>节点设备数</th>
+                    <th>平台设备数</th>
+                    <th>数量差额</th>
+                    <th>差额详情</th>
+                    <th>对比开始时间</th>
+                    <th>对比结束时间</th>
+                    <th>对比状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <!-- 数据由JS渲染 -->
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- 分页区 -->
+    <div class="pagination-section">
+        <div class="page-left">
+            <span id="pageTotalCount">共 0 条</span>
+            <select id="pageSizeSelect" onchange="changePageSize()">
+                <option value="10" selected>10条/页</option>
+                <option value="20">20条/页</option>
+                <option value="50">50条/页</option>
+            </select>
+        </div>
+        <div class="page-right">
+            <span class="page-arrow" id="prevPageBtn" onclick="prevPage()">&lt;</span>
+            <span class="page-current" id="currentPageDisplay">1</span>
+            <span class="page-arrow" id="nextPageBtn" onclick="nextPage()">&gt;</span>
+            <div class="page-goto">
+                <span>前往</span>
+                <input type="text" id="pageGotoInput" value="1" onkeyup="if(event.keyCode==13) gotoPage()">
+                <span>页</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 侧边滑窗 -->
+    <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+    <div class="drawer" id="detailDrawer">
+        <div class="drawer-header">
+            <div class="drawer-title">台账差额详情</div>
+            <div>
+                <span class="drawer-diff-count" id="drawerDiffCount">差额数：0台</span>
+            </div>
+            <button class="drawer-close" onclick="closeDrawer()">&times;</button>
+        </div>
+        <div class="drawer-content">
+            <table style="min-width: 100%; border: none;">
+                <thead>
+                    <tr>
+                        <th style="background-color: #f5f7fa; border-right:none; border-left:none; border-top:none;">设备ID (物联标识码)</th>
+                        <th style="background-color: #f5f7fa; width: 100px; border-right:none; border-top:none;">差额状态</th>
+                    </tr>
+                </thead>
+                <tbody id="drawerTableBody">
+                    <!-- 详情数据 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // ----------------- 数据生成与状态 -----------------
+        let allMockData = [];
+        let filteredData = [];
+        let currentPage = 1;
+        let pageSize = 10;
+
+        // 仅生成 10 条模拟数据
+        function generateMockData() {
+            const nodes = ["金三立视频节点", "华三视频接入网关", "海康威视核心接入", "大华视频服务聚合", "宇视前端汇聚节点"];
+            const statuses = ["成功", "成功", "成功", "失败"];
+            for (let i = 1; i <= 10; i++) {
+                let status = statuses[i % 4];
+                let isSuccess = status === "成功";
+                let diff = isSuccess ? (i % 5) : "-";
+                
+                let details = [];
+                if (isSuccess && diff > 0) {
+                    for(let j=0; j<diff; j++) {
+                        details.push({
+                            devId: `IOT-VID-${1000 + i*10 + j}`,
+                            type: j % 2 === 0 ? "缺失" : "多余"
+                        });
+                    }
+                }
+
+                allMockData.push({
+                    id: `44162200000${String(i).padStart(2, '0')}`,
+                    name: `${nodes[i % 5]}_${i}`,
+                    nodeCount: isSuccess ? 100 - (i % 5) : "-",
+                    platformCount: 100,
+                    diffCount: diff,
+                    startTime: `2026-05-18 10:${String(i).padStart(2, '0')}:00`,
+                    endTime: isSuccess ? `2026-05-18 10:${String(i).padStart(2, '0')}:30` : "-",
+                    status: status,
+                    details: details,
+                    rawId: i
+                });
+            }
+            // 按时间倒序
+            allMockData.sort((a, b) => b.rawId - a.rawId);
+            filteredData = [...allMockData];
+        }
+
+        // ----------------- 分页与渲染逻辑 -----------------
+        function renderTable() {
+            const tbody = document.getElementById("tableBody");
+            tbody.innerHTML = "";
+            
+            const total = filteredData.length;
+            const totalPages = Math.ceil(total / pageSize) || 1;
+            
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = Math.min(startIndex + pageSize, total);
+            const pageData = filteredData.slice(startIndex, endIndex);
+
+            if (pageData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="10" class="no-data" style="border-bottom:none;">暂无匹配的对比记录</td></tr>`;
+            } else {
+                pageData.forEach((row, index) => {
+                    const tr = document.createElement("tr");
+                    
+                    let statusClass = "status-success";
+                    if (row.status === "失败") statusClass = "status-failed";
+                    if (row.status === "进行中") statusClass = "status-processing";
+
+                    const isSuccess = row.status === "成功";
+                    const isFailed = row.status === "失败";
+                    
+                    // 如果是本页最后一行，补充底边框（因为没有充满整个table-section时需要封底）
+                    const isLast = (index === pageData.length - 1);
+
+                    tr.innerHTML = `
+                        <td style="${isLast ? 'border-bottom: 1px solid #ebeef5;' : ''}">${row.id}</td>
+                        <td style="${isLast ? 'border-bottom: 1px solid #ebeef5;' : ''}">${row.name}</td>
+                        <td style="${isLast ? 'border-bottom: 1px solid #ebeef5;' : ''}">${row.nodeCount}</td>
+                        <td style="${isLast ? 'border-bottom: 1px solid #ebeef5;' : ''}">${row.platformCount}</td>
+                        <td style="${isLast ? 'border-bottom: 1px solid #ebeef5;' : ''}">${row.diffCount}</td>
+                        <td style="${isLast ? 'border-bottom: 1px solid #ebeef5;' : ''}">
+                            <button class="btn-text" ${!isSuccess ? 'disabled' : ''} onclick="openDrawer('${row.id}')">详情</button>
+                        </td>
+                        <td style="${isLast ? 'border-bottom: 1px solid #ebeef5;' : ''}">${row.startTime}</td>
+                        <td style="${isLast ? 'border-bottom: 1px solid #ebeef5;' : ''}">${row.endTime}</td>
+                        <td style="${isLast ? 'border-bottom: 1px solid #ebeef5;' : ''}">
+                            <span class="status-badge ${statusClass}">
+                                <i class="status-dot"></i>${row.status}
+                            </span>
+                        </td>
+                        <td style="${isLast ? 'border-bottom: 1px solid #ebeef5;' : ''}">
+                            <button class="btn-text" ${!isFailed ? 'disabled' : ''} onclick="retryComparison('${row.id}')">重试</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            // 更新分页 UI
+            document.getElementById("pageTotalCount").innerText = `共 ${total} 条`;
+            document.getElementById("currentPageDisplay").innerText = currentPage;
+            document.getElementById("pageGotoInput").value = currentPage;
+
+            const prevBtn = document.getElementById("prevPageBtn");
+            const nextBtn = document.getElementById("nextPageBtn");
+
+            if (currentPage <= 1) prevBtn.classList.remove("active");
+            else prevBtn.classList.add("active");
+
+            if (currentPage >= totalPages) nextBtn.classList.remove("active");
+            else nextBtn.classList.add("active");
+        }
+
+        // ----------------- 分页交互 -----------------
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                renderTable();
+            }
+        }
+
+        function nextPage() {
+            const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderTable();
+            }
+        }
+
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById("pageSizeSelect").value);
+            currentPage = 1;
+            renderTable();
+        }
+
+        function gotoPage() {
+            let val = parseInt(document.getElementById("pageGotoInput").value);
+            const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
+            if (!isNaN(val) && val >= 1 && val <= totalPages) {
+                currentPage = val;
+                renderTable();
+            } else {
+                document.getElementById("pageGotoInput").value = currentPage;
+            }
+        }
+
+        // ----------------- 筛选交互 -----------------
+        function filterData() {
+            const sId = document.getElementById("searchNodeId").value.trim().toLowerCase();
+            const sName = document.getElementById("searchNodeName").value.trim().toLowerCase();
+            const sStatus = document.getElementById("searchStatus").value;
+            
+            filteredData = allMockData.filter(item => {
+                const matchId = item.id.toLowerCase().includes(sId);
+                const matchName = item.name.toLowerCase().includes(sName);
+                const matchStatus = sStatus === "" || item.status === sStatus;
+                return matchId && matchName && matchStatus;
+            });
+            
+            currentPage = 1; 
+            renderTable();
+        }
+
+        function resetFilters() {
+            document.getElementById("searchNodeId").value = "";
+            document.getElementById("searchNodeName").value = "";
+            document.getElementById("searchStatus").value = "";
+            document.getElementById("timeStart").value = "";
+            document.getElementById("timeEnd").value = "";
+            
+            filteredData = [...allMockData];
+            currentPage = 1;
+            renderTable();
+        }
+
+        // ----------------- 业务逻辑交互 (滑窗与重试) -----------------
+        function openDrawer(nodeId) {
+            const record = filteredData.find(item => item.id === nodeId);
+            if (!record || record.status !== "成功") return;
+
+            document.getElementById("drawerDiffCount").innerText = `差额数：${record.diffCount}台`;
+            const drawerTbody = document.getElementById("drawerTableBody");
+            drawerTbody.innerHTML = "";
+
+            if (record.details.length === 0) {
+                drawerTbody.innerHTML = `<tr><td colspan="2" class="no-data">核对完全一致，无差额明细</td></tr>`;
+            } else {
+                record.details.forEach(detail => {
+                    const tr = document.createElement("tr");
+                    const badgeClass = detail.type === "缺失" ? "badge-missing" : "badge-surplus";
+                    tr.innerHTML = `
+                        <td style="text-align: center; border-left:none; border-right:none;">${detail.devId}</td>
+                        <td style="text-align: center; border-right:none;"><span class="${badgeClass}">${detail.type}</span></td>
+                    `;
+                    drawerTbody.appendChild(tr);
+                });
+            }
+
+            document.getElementById("drawerOverlay").style.display = "block";
+            document.getElementById("detailDrawer").classList.add("open");
+        }
+
+        function closeDrawer() {
+            document.getElementById("drawerOverlay").style.display = "none";
+            document.getElementById("detailDrawer").classList.remove("open");
+        }
+
+        function formatCurrentTime() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            const h = String(now.getHours()).padStart(2, '0');
+            const i = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            return `${y}-${m}-${d} ${h}:${i}:${s}`;
+        }
+
+        function retryComparison(nodeId) {
+            const indexInAll = allMockData.findIndex(item => item.id === nodeId);
+            if (indexInAll === -1) return;
+            
+            let item = allMockData[indexInAll];
+            item.status = "进行中";
+            item.startTime = formatCurrentTime();
+            item.endTime = "-";
+            item.diffCount = "-";
+            
+            filterData(); 
+
+            setTimeout(() => {
+                item.status = "成功";
+                item.nodeCount = 100;
+                item.diffCount = 0;
+                item.endTime = formatCurrentTime();
+                item.details = [];
+                filterData(); 
+            }, 1500);
+        }
+
+        // ----------------- 初始化 -----------------
+        window.onload = function() {
+            generateMockData();
+            renderTable();
+        };
+    </script>
+</body>
+</html>
